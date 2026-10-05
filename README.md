@@ -9,7 +9,7 @@
 
 | 设置 | 值 |
 | --- | --- |
-| Worker 名称 | `buwanyuanshen` |
+| Worker 名称 | `mihoyo` |
 | 生产分支 | `main` |
 | 根目录 | 仓库根目录（留空或 `/`） |
 | 构建命令 | `node scripts/convert.js scripts/jump.js pages/aha.js` |
