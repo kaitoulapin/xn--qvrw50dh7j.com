@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>感觉都不如原神</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        color: #000;
+        background: #fff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        min-height: 100svh;
+        display: grid;
+        place-items: center;
+        padding: 64px 28px;
+      }
+      main {
+        width: min(640px, 100%);
+      }
+      label {
+        display: block;
+        margin-bottom: 40px;
+        font-size: clamp(36px, 7vw, 56px);
+        line-height: 1.25;
+        font-weight: 800;
+        letter-spacing: -0.05em;
+      }
+      label span {
+        display: block;
+      }
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #000;
+      }
+      input {
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+        padding: 14px 0;
+        border: 0;
+        border-radius: 0;
+        background: #fff;
+        color: #000;
+        font: inherit;
+        font-size: 18px;
+      }
+      button {
+        cursor: pointer;
+        font: inherit;
+      }
+      .enter {
+        flex: 0 0 56px;
+        height: 56px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid #000;
+        border-radius: 14px;
+        background: #000;
+        color: #fff;
+      }
+      .enter svg {
+        width: 22px;
+        height: 22px;
+      }
+      .enter:hover {
+        background: #fff;
+        color: #000;
+      }
+      input:focus-visible,
+      button:focus-visible,
+      a:focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 5px;
+      }
+      .submission {
+        margin-top: 56px;
+        font-size: 14px;
+        line-height: 1.9;
+      }
+      .submission p {
+        margin: 0;
+      }
+      .contact {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px 20px;
+        margin: 10px 0;
+      }
+      .contact a {
+        color: #000;
+        font-family: 'Cascadia Mono', Consolas, monospace;
+        font-size: clamp(16px, 4.5vw, 20px);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 5px;
+        overflow-wrap: anywhere;
+        user-select: all;
+      }
+      .copy {
+        min-height: 44px;
+        padding: 8px 0;
+        border: 0;
+        background: #fff;
+        color: #000;
+        font-size: 12px;
+        text-decoration: underline;
+        text-underline-offset: 4px;
+      }
+      @media (max-width: 480px) {
+        body {
+          padding: 48px 24px;
+        }
+        label {
+          margin-bottom: 32px;
+        }
+        .submission {
+          margin-top: 40px;
+        }
+        .enter {
+          flex-basis: 48px;
+          height: 48px;
+          border-radius: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <form action="https://www.bing.com/search" method="get">
+        <label for="search"><span>想要什么</span><span>自己搜吧</span></label>
+        <div class="search">
+          <input
+            id="search"
+            type="search"
+            name="q"
+            required
+            enterkeyhint="search"
+            aria-label="搜索内容"
+          />
+          <button class="enter" type="submit" aria-label="搜索">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="10.5" cy="10.5" r="6.5" />
+              <path d="m16 16 5 5" />
+            </svg>
+          </button>
+        </div>
+      </form>
+      <section class="submission" aria-label="投稿征集">
+        <p>或者，你还想把什么加进这个网站，可以发送邮件至</p>
+        <div class="contact">
+          <a id="email" href="mailto:genshennb@keemail.me">genshennb@keemail.me</a>
+          <button class="copy" type="button" id="copy" aria-live="polite">复制邮箱</button>
+        </div>
+        <p>我们会酌情采用。</p>
+      </section>
+    </main>
+    <script>
+      const copy = document.getElementById('copy')
+      const email = document.getElementById('email')
+      copy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(email.textContent)
+          copy.textContent = '已复制'
+        } catch {
+          const range = document.createRange()
+          range.selectNodeContents(email)
+          const selection = window.getSelection()
+          selection.removeAllRanges()
+          selection.addRange(range)
+          copy.textContent = '已选中，请复制'
+        }
+        setTimeout(() => {
+          copy.textContent = '复制邮箱'
+        }, 2500)
+      })
+    </script>
+  </body>
+</html>
