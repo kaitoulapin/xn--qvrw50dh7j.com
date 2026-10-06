@@ -994,8 +994,10 @@ if (probeParam !== null && probeParam !== '0' && probeParam !== 'false') {
       button.disabled = false
       const begin = once(() => {
         button.disabled = true
-        guide.querySelector('#open-label').textContent = '正在启动…'
-        guide.querySelector('#entry-note').textContent = '动画加载中，请稍候。'
+        const label = guide.querySelector('#open-label')
+        const note = guide.querySelector('#entry-note')
+        if (label) label.textContent = '正在启动…'
+        if (note) note.textContent = '动画加载中，请稍候。'
         // 点击事件内同步调用 play，保留用户激活状态。
         if (!playStartupVideo(video, redirect)) redirect()
       })
