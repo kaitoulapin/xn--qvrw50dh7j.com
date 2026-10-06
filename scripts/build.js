@@ -11,14 +11,10 @@ if ((process.argv.includes('--cloudflare') || process.env.WORKERS_CI) && process
   process.exit(result.status || (result.signal ? 1 : 0))
 }
 const config = JSON.parse(fs.readFileSync(path.join(crate, 'config.json'), 'utf8'))
-const settings = config.config
-if (!(settings.SOFT_PITY_5 >= 1 && settings.SOFT_PITY_5 <= settings.HARD_PITY_5)) throw new Error('Invalid five-star pity settings')
-if (!Number.isFinite(settings.UP_SHARE) || settings.UP_SHARE < 0 || settings.UP_SHARE > 1) throw new Error('UP_SHARE must be between 0 and 1')
-if (!Number.isFinite(settings.MAX_PULLS) || settings.MAX_PULLS < 1) throw new Error('MAX_PULLS must be positive')
+require('./validate-config.js').validateConfig(config)
 for (const pool of ['limited', 'standard', 'preferred', 'filler']) {
   const plan = config[pool]
   if (!Array.isArray(plan.cards) || !Array.isArray(plan.up)) throw new Error('Invalid pool: ' + pool)
-  if (pool !== 'filler' && !plan.cards.length) throw new Error('Empty pool: ' + pool)
   for (const card of [...plan.cards, ...plan.up]) {
     if (!card.url || !card.rarity) throw new Error('Invalid card: ' + pool)
     if (card.video) {
@@ -33,7 +29,7 @@ if (config.progress.SHOW && config.progress.BYTES > 0) {
     throw new Error('Video byte count changed; update progress.BYTES in wasm/config.json')
   }
 }
-const result = spawnSync('cargo', ['build', '--manifest-path', path.join(crate, 'Cargo.toml'), '--target', 'wasm32-unknown-unknown', '--release', '--locked'], { cwd: root, stdio: 'inherit', env: { ...process.env, AHA_BUILD_NONCE: crypto.randomBytes(32).toString('hex') } })
+const result = spawnSync('cargo', ['+nightly-2026-10-01', 'build', '-Zbuild-std=std,panic_abort', '-Zbuild-std-features=', '--manifest-path', path.join(crate, 'Cargo.toml'), '--target', 'wasm32-unknown-unknown', '--release', '--locked'], { cwd: root, stdio: 'inherit', env: { ...process.env, AHA_BUILD_NONCE: crypto.randomBytes(32).toString('hex'), RUSTFLAGS: '-Zunstable-options -Cpanic=immediate-abort'  } })
 if (result.error) throw result.error
 if (result.status !== 0) process.exit(result.status || 1)
 const binary = fs.readFileSync(path.join(crate, 'target/wasm32-unknown-unknown/release/aha_wasm.wasm'))
@@ -47,6 +43,16 @@ for (const target of targets) {
 }
 for (const source of ['config.json', 'src/guide.html']) {
   if (binary.includes(fs.readFileSync(path.join(crate, source)))) throw new Error('Plaintext embedded source found: ' + source)
+}
+const fragments = ['index out of bounds: the len is ', '点击任意处开声音', '3★池未配置（兜底）', '3★池未配置（提升为4★）', '启动动画', '限定', '歪了', '下个5★必是限定UP', '大保底', '本次必为限定UP', '捕获明光', '已触发', '[卡池] 跳转目标', 'storageBroken', '[卡池] localStorage 不可用', 'fallback', 'group']
+for (const source of ['src/engine.rs', 'src/runtime.rs']) {
+  const text = fs.readFileSync(path.join(crate, source), 'utf8')
+  for (const match of text.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)) {
+    if (/[\u3400-\u9fff]/.test(match[1]) || Buffer.byteLength(match[1]) >= 8) fragments.push(match[1])
+  }
+}
+for (const text of new Set(fragments)) {
+  if (binary.includes(Buffer.from(text))) throw new Error('Plaintext runtime fragment found: ' + text)
 }
 fs.writeFileSync(path.join(root, 'pages/aha.wasm'), binary)
 const host = fs.readFileSync(path.join(__dirname, 'load.js'), 'utf8')

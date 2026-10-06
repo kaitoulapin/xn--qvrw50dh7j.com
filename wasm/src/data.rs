@@ -43,6 +43,11 @@ pub fn guide() -> &'static str {
     VALUE.get_or_init(|| unpack(GUIDE_DATA))
 }
 
+pub fn text(id: usize) -> &'static str {
+    static VALUE: OnceLock<Vec<String>> = OnceLock::new();
+    &VALUE.get_or_init(|| serde_json::from_str(&unpack(TEXT_DATA)).unwrap())[id]
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

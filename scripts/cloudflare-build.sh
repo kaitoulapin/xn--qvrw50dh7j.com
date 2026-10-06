@@ -11,9 +11,9 @@ if ! command -v rustup >/dev/null 2>&1; then
   sh "$installer" -y --profile minimal --default-toolchain none
 fi
 
-rustup toolchain install 1.98.1 --profile minimal
-rustup target add wasm32-unknown-unknown --toolchain 1.98.1
-export RUSTUP_TOOLCHAIN=1.98.1
+rustup toolchain install nightly-2026-10-01 --profile minimal --component rust-src
+rustup target add wasm32-unknown-unknown --toolchain nightly-2026-10-01
+export RUSTUP_TOOLCHAIN=nightly-2026-10-01
 # Avoid re-entering the Cloudflare bootstrap from the child build.
 unset WORKERS_CI
 node scripts/build.js

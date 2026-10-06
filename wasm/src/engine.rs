@@ -138,7 +138,10 @@ impl Engine {
             .iter()
             .enumerate()
             .map(|(i, card)| {
-                let own = card["weight"]
+                let own = card
+                    .get("weight")
+                    .or_else(|| card.get("share"))
+                    .unwrap_or(&Value::Null)
                     .as_f64()
                     .filter(|n| n.is_finite() && *n > 0.0)
                     .unwrap_or(1.0);
@@ -150,8 +153,13 @@ impl Engine {
                 1.0 / ((i + 1) as f64).powf(self.cfg("WEIGHT_CURVE")) * own * repeat
             })
             .collect();
-        if weights.iter().sum::<f64>() <= 0.0 {
+        let maximum = weights.iter().copied().fold(0.0, f64::max);
+        if maximum <= 0.0 {
             weights.fill(1.0);
+        } else {
+            for weight in &mut weights {
+                *weight /= maximum;
+            }
         }
         let mut roll = self.random() * weights.iter().sum::<f64>();
         for (i, w) in weights.iter().enumerate() {
@@ -165,7 +173,10 @@ impl Engine {
     fn plan(&mut self, name: &str) -> Value {
         let plan = self.config[name].clone();
         let up = plan["up"].as_array().unwrap();
-        if !up.is_empty() && self.random() < self.cfg("UP_SHARE") {
+        if !up.is_empty()
+            && (plan["cards"].as_array().unwrap().is_empty()
+                || self.random() < self.cfg("UP_SHARE"))
+        {
             self.pick(up, false)
         } else {
             self.pick(plan["cards"].as_array().unwrap(), false)
@@ -180,7 +191,7 @@ impl Engine {
             return self.cfg("BASE_RATE_5");
         }
         (self.cfg("BASE_RATE_5")
-            + (pity - self.cfg("SOFT_PITY_5") + 1.0) * self.cfg("SOFT_PITY_STEP_5"))
+            + (pity - self.cfg("SOFT_PITY_5") + 2.0) * self.cfg("SOFT_PITY_STEP_5"))
         .clamp(0.0, 1.0)
     }
     fn five(&mut self) -> Value {
@@ -191,11 +202,14 @@ impl Engine {
         } else {
             self.cfg("UP_RATE")
         };
-        let radiance = !guaranteed && rate > self.cfg("UP_RATE");
-        if guaranteed || self.random() < rate {
+        let forced_up = self.force == "ur";
+        let radiance = !forced_up && !guaranteed && rate > self.cfg("UP_RATE");
+        if forced_up || guaranteed || self.random() < rate {
             let mut card = self.plan("limited");
             self.state["guaranteeUp"] = json!(false);
-            self.state["lossStreak"] = json!(0);
+            if !guaranteed || forced_up {
+                self.state["lossStreak"] = json!(0);
+            }
             let url = txt(&card["url"]).to_owned();
             self.state["limitedHits"][&url] = json!(num(&self.state["limitedHits"][&url]) + 1.0);
             card["pity"] = pity;
@@ -221,7 +235,7 @@ impl Engine {
         let roll = self.random();
         let pity = self.state["pity5"].clone();
         let mut card;
-        if roll < rate5 || self.force == "ur" {
+        if roll < rate5 || matches!(self.force.as_str(), "ur" | "5") {
             card = self.five();
             self.state["pity5"] = json!(0);
             self.state["pity4"] = json!(0);
@@ -231,10 +245,11 @@ impl Engine {
             card["pity"] = pity;
             self.state["pity5"] = json!(num(&self.state["pity5"]) + 1.0);
             self.state["pity4"] = json!(0);
-        } else if !self.config["filler"]["cards"]
-            .as_array()
-            .unwrap()
-            .is_empty()
+        } else if !self.config["filler"]["up"].as_array().unwrap().is_empty()
+            || !self.config["filler"]["cards"]
+                .as_array()
+                .unwrap()
+                .is_empty()
         {
             card = self.plan("filler");
             card["pity"] = pity;
@@ -280,9 +295,15 @@ impl Engine {
             || url.starts_with("../")
             || url.starts_with('?')
         {
+            let (path, fragment) = url.split_once('#').unwrap_or((url, ""));
             format!(
-                "{url}{}gacha={mark}",
-                if url.contains('?') { '&' } else { '?' }
+                "{path}{}gacha={mark}{}",
+                if path.contains('?') { '&' } else { '?' },
+                if fragment.is_empty() {
+                    String::new()
+                } else {
+                    format!("#{fragment}")
+                }
             )
         } else {
             format!("{}#gacha-{mark}", url.split('#').next().unwrap())
@@ -328,8 +349,138 @@ impl Engine {
 }
 pub fn rank(s: &str) -> u8 {
     match s {
-        "UR" | "SSR" => 3,
+        "UR" => 4,
+        "SSR" => 3,
         "SR" => 2,
         _ => 1,
+    }
+}
+
+#[cfg(test)]
+mod audit {
+    use super::*;
+    fn engine() -> Engine {
+        Engine::new(&json!({"search":"?seed=42"}))
+    }
+    #[test]
+    fn soft_and_hard_pity_boundaries() {
+        let mut e = engine();
+        for (pity, expected) in [
+            (0, 0.04),
+            (10, 0.04),
+            (11, 0.12),
+            (12, 0.20),
+            (18, 0.68),
+            (19, 1.0),
+        ] {
+            e.state["pity5"] = json!(pity);
+            assert!((e.rate5() - expected).abs() < 1e-10);
+        }
+    }
+    #[test]
+    fn radiance_is_reachable_through_guarantees() {
+        let mut e = engine();
+        e.force = "5".into();
+        e.config["config"]["UP_RATE"] = json!(0);
+        e.config["config"]["RADIANCE_UP_RATE"] = json!(1);
+        for expected in [1, 1, 2, 2, 3, 3] {
+            e.draw();
+            assert_eq!(num(&e.state["lossStreak"]), expected as f64);
+        }
+        let card = e.draw();
+        assert_eq!(card["rarity"], "UR");
+        assert_eq!(card["radiance"], true);
+        assert_eq!(num(&e.state["lossStreak"]), 0.0);
+    }
+    #[test]
+    fn hard_pities_prevent_excessive_gaps() {
+        let mut e = engine();
+        e.config["config"]["BASE_RATE_5"] = json!(0);
+        e.config["config"]["SOFT_PITY_STEP_5"] = json!(0);
+        e.config["config"]["BASE_RATE_4"] = json!(0);
+        for _ in 0..1000 {
+            e.draw();
+            assert!(num(&e.state["pity5"]) < 20.0);
+            assert!(num(&e.state["pity4"]) < 10.0);
+        }
+    }
+    #[test]
+    fn highest_rarity_wins_multi_pull() {
+        let mut e = engine();
+        e.force = "5".into();
+        let (cards, best) = e.many(50);
+        assert!(cards.iter().any(|c| c["rarity"] == "SSR"));
+        assert!(cards.iter().any(|c| c["rarity"] == "UR"));
+        assert_eq!(best["rarity"], "UR");
+        assert_eq!(best, *cards.iter().find(|c| c["rarity"] == "UR").unwrap());
+    }
+    #[test]
+    fn up_only_and_empty_filler_pools_are_safe() {
+        let mut e = engine();
+        let up = json!({"url":"./up","rarity":"R"});
+        e.config["filler"]["cards"] = json!([]);
+        e.config["filler"]["up"] = json!([up.clone()]);
+        e.config["config"]["UP_SHARE"] = json!(0);
+        assert_eq!(e.plan("filler"), up);
+        e.config["filler"]["up"] = json!([]);
+        e.config["config"]["BASE_RATE_5"] = json!(0);
+        e.config["config"]["BASE_RATE_4"] = json!(0);
+        e.config["config"]["FILLER_FALLBACK_UPGRADE"] = json!(0);
+        assert_eq!(e.draw()["url"], e.config["fallback"]);
+    }
+    #[test]
+    fn weighting_and_repeat_damping_have_expected_distribution() {
+        let mut e = engine();
+        let cards = vec![json!({"url":"a","weight":4}), json!({"url":"b","weight":1})];
+        let hits = (0..20000)
+            .filter(|_| e.pick(&cards, false)["url"] == "a")
+            .count();
+        assert!((0.78..0.82).contains(&(hits as f64 / 20000.0)));
+        let cards = vec![json!({"url":"a"}), json!({"url":"b"})];
+        e.state["lastStandardUrl"] = json!("a");
+        let hits = (0..20000)
+            .filter(|_| e.pick(&cards, true)["url"] == "a")
+            .count();
+        assert!((0.31..0.35).contains(&(hits as f64 / 20000.0)));
+    }
+    #[test]
+    fn share_curve_up_ratio_and_large_weights_work() {
+        let mut e = engine();
+        for cards in [
+            vec![json!({"url":"a","share":4}), json!({"url":"b","share":1})],
+            vec![
+                json!({"url":"a","weight":1e308}),
+                json!({"url":"b","weight":1e308}),
+            ],
+        ] {
+            let hits = (0..20000)
+                .filter(|_| e.pick(&cards, false)["url"] == "a")
+                .count();
+            let expected = if cards[0].get("share").is_some() {
+                0.8
+            } else {
+                0.5
+            };
+            assert!((hits as f64 / 20000.0 - expected).abs() < 0.02);
+        }
+        e.config["config"]["WEIGHT_CURVE"] = json!(1);
+        let cards = vec![json!({"url":"a"}), json!({"url":"b"}), json!({"url":"c"})];
+        let hits = (0..20000)
+            .filter(|_| e.pick(&cards, false)["url"] == "a")
+            .count();
+        assert!((hits as f64 / 20000.0 - 6.0 / 11.0).abs() < 0.02);
+        e.config["filler"] = json!({"cards":[{"url":"normal"}],"up":[{"url":"up"}]});
+        let hits = (0..20000)
+            .filter(|_| e.plan("filler")["url"] == "up")
+            .count();
+        assert!((hits as f64 / 20000.0 - 0.5).abs() < 0.02);
+    }
+    #[test]
+    fn internal_url_mark_keeps_query_before_fragment() {
+        let e = engine();
+        assert_eq!(
+            e.target(&json!({"url":"./search.html?q=x#anchor","rarity":"SSR","pity":3})),
+            "./search.html?q=x&gacha=ssr-3#anchor"
+        );
     }
 }

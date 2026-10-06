@@ -1,6 +1,12 @@
 mod data;
-mod engine;
-mod runtime;
+#[allow(unused_parens)]
+mod engine {
+    include!(concat!(env!("OUT_DIR"), "/engine.rs"));
+}
+#[allow(unused_parens)]
+mod runtime {
+    include!(concat!(env!("OUT_DIR"), "/runtime.rs"));
+}
 pub use runtime::execute;
 use serde_json::{Value, json};
 use std::cell::RefCell;
@@ -22,7 +28,7 @@ pub unsafe extern "C" fn dispatch(ptr: *const u8, len: usize) -> *const u8 {
     let input = unsafe { std::slice::from_raw_parts(ptr, len) };
     let response = match serde_json::from_slice::<Value>(input) {
         Ok(request) => execute(&request),
-        Err(e) => json!({"error":e.to_string()}),
+        Err(_) => json!({"error":true}),
     };
     OUTPUT.with(|out| {
         let mut out = out.borrow_mut();

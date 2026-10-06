@@ -1,3 +1,4 @@
+mod string_codegen;
 use std::{
     env, fs,
     path::PathBuf,
@@ -46,6 +47,7 @@ fn pack(name: &str, bytes: &[u8], state: &mut u32) -> String {
 
 fn main() {
     println!("cargo:rerun-if-changed=config.json");
+    println!("cargo:rerun-if-changed=string_codegen.rs");
     println!("cargo:rerun-if-changed=src/guide.html");
     println!("cargo:rerun-if-env-changed=AHA_BUILD_NONCE");
     let nonce = env::var("AHA_BUILD_NONCE").unwrap_or_else(|_| {
@@ -62,7 +64,21 @@ fn main() {
     state |= 1;
     let config = fs::read("config.json").unwrap();
     let guide = fs::read("src/guide.html").unwrap();
-    let source = pack("CONFIG_DATA", &config, &mut state) + &pack("GUIDE_DATA", &guide, &mut state);
+    let output = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    let mut strings = string_codegen::Strings::default();
+    for name in ["engine", "runtime"] {
+        let input = format!("src/{name}.rs");
+        println!("cargo:rerun-if-changed={input}");
+        let generated = string_codegen::generate(&fs::read_to_string(input).unwrap(), &mut strings);
+        fs::write(output.join(format!("{name}.rs")), generated).unwrap();
+    }
+    let source = pack("CONFIG_DATA", &config, &mut state)
+        + &pack("GUIDE_DATA", &guide, &mut state)
+        + &pack(
+            "TEXT_DATA",
+            &serde_json::to_vec(&strings.values).unwrap(),
+            &mut state,
+        );
     fs::write(
         PathBuf::from(env::var_os("OUT_DIR").unwrap()).join("packed.rs"),
         source,

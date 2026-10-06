@@ -15,6 +15,7 @@ wasm/
   src/guide.html                UR 黑白引导页样式和内容（编译进 WASM）
   src/lib.rs                    WASM 内存及 JSON 调用接口
   build.rs / src/data.rs        构建时随机分块编码、运行时解码与缓存
+  string_codegen.rs             编译前 AST 转换业务文案、字段名和匹配分支
 scripts/
   build.js                      编译 Rust、生成 WASM 和混淆加载器
   cloudflare-build.sh            Cloudflare 安装固定 Rust 工具链并构建
@@ -31,10 +32,10 @@ pages/
 
 ## 修改与本地构建
 
-需要 Node.js、Rust（支持 edition 2024 的版本）和 WASM 编译目标。
+需要 Node.js、固定 Rust nightly-2026-10-01、rust-src 和 WASM 编译目标。
 
 ```sh
-rustup target add wasm32-unknown-unknown
+rustup toolchain install nightly-2026-10-01 --profile minimal --component rust-src --target wasm32-unknown-unknown
 node scripts/build.js
 ```
 
@@ -48,6 +49,12 @@ node scripts/build.js
 使用各块独立的伪随机字节流和前一密文字节混合编码，并分拆存储种子。
 运行时解码通过 black_box 防止 LTO 折叠回明文，配置首次使用时解码并缓存，引导页仅在需要时解码。
 构建会扫描发布 WASM，若发现完整目标 URL 或完整原始配置 / HTML，则中止发布。
+业务代码在 build.rs 中经 syn 解析并转换 AST：文案、字段名和字符串匹配分支改为编码表引用。
+原始 engine.rs / runtime.rs 保持可读，实际编译 OUT_DIR 中生成的代码，解码逻辑在 WASM 内执行。
+使用 nightly 的 build-std 重编译标准库，panic=immediate-abort 裁剪越界等 panic 格式化文案。
+panic 路径仍终止执行，不再提供详细诊断文字；没有禁用边界检查或引入 unchecked 访问。
+发布的 aha.wasm 与编译器输出逐字节相同，没有任何编译后改写；加载器仅实例化模块。
+发布扫描包含运行时文案、源码中文字符串及较长字段名，防止只保护配置而漏掉业务字符串。
 这是增加静态分析成本的混淆方案，不是保密加密：运行时内存、调用结果和实际跳转仍可观察。
 公开仓库中的 config.json 和旧 jump.js 仍可直接读取原始链接。
 
@@ -65,7 +72,7 @@ node scripts/build.js
 
 Worker 名称与 `wrangler.jsonc` 保持一致，只发布 `pages`。
 Wrangler 部署前执行 `node scripts/build.js --cloudflare`。
-Linux 构建环境会运行 `scripts/cloudflare-build.sh`，通过官方 rustup 安装 Rust 1.98.1
+Linux 构建环境会运行 `scripts/cloudflare-build.sh`，通过官方 rustup 安装固定 nightly-2026-10-01、rust-src
 及 `wasm32-unknown-unknown`，随后编译 Rust，并通过 convert.js 混淆 load.js。
 构建失败会阻止部署。Cloudflare 构建环境需要能访问 Rust 下载服务及 crates.io。
 
@@ -78,7 +85,9 @@ Linux 构建环境会运行 `scripts/cloudflare-build.sh`，通过官方 rustup 
 
 `config.json` 中 `config` 保留原来的概率配置：基础五星 4%、四星 30%、
 第 12 抽起软保底、第 20 抽五星硬保底、四星 10 抽保底、50% UP、大保底、捕获明光、
-常驻重复权重减半以及单次最多 10 抽。`WEIGHT_CURVE` 默认为 0（池内等概率）。
+常驻重复权重减半以及单次最多 10 抽。
+软保底第 12 抽即从 4% 提高至 12%；多抽按 UR > SSR > SR > R 选最高稀有度，同级取第一张。
+连续歪统计仅在非大保底的 UP 出货时清零，大保底出货保留计数，使捕获明光可自然触发。`WEIGHT_CURVE` 默认为 0（池内等概率）。
 
 | 卡池 | 字段 | 稀有度 |
 | --- | --- | --- |
@@ -87,7 +96,7 @@ Linux 构建环境会运行 `scripts/cloudflare-build.sh`，通过官方 rustup 
 | 投稿 / 四星 | `preferred.cards`，可选 `preferred.up` | SR |
 | 狗粮 | `filler.cards`，可选 `filler.up` | R |
 
-卡片使用 `url`、`group`、`rarity`，限定卡可带 `video`；可用 `weight` 指定池内权重。
+卡片使用 `url`、`group`、`rarity`，限定卡可带 `video`；可用 `weight` 指定池内权重，兼容限定卡的 `share`（同时存在时 weight 优先）。
 四星 / 三星有 UP 子池时按 `config.UP_SHARE` 分配，其余卡按池内权重抽取。
 视频配置位于 `startup`，加载进度配置位于 `progress`。
 更换视频后更新 `progress.BYTES`，构建时会核对素材存在且大小一致。
@@ -103,7 +112,8 @@ Linux 构建环境会运行 `scripts/cloudflare-build.sh`，通过官方 rustup 
 | `?seed=123` | 固定 mulberry32 种子，可复现 |
 | `?reset=1` | 重置保底 |
 | `?pull=10` | 多抽，最高稀有度卡决定跳转，同级取第一张 |
-| `?force=ur` | 与旧版相同：强制进入五星分支，仍按大小保底决定限定或常驻 |
+| `?force=ur` | 强制限定 UR，连续访问也不会歪到 SSR |
+| `?force=5` | 强制五星分支，仍按大小保底决定 UR 或 SSR |
 | `?seed=42&force=ur` | 固定种子的限定视频引导测试 |
 | `?probe=1` | 仅控制台自检，不跳转、不写入本次抽卡 |
 | `?probe=1&sim=20000` | 模拟分布，恢复原存档，不跳转 |
@@ -112,6 +122,10 @@ Linux 构建环境会运行 `scripts/cloudflare-build.sh`，通过官方 rustup 
 cargo test --manifest-path wasm/Cargo.toml --locked
 node scripts/test-wasm.js
 node scripts/test-wasm-host.js
+node scripts/test-gacha-audit.js
 ```
 
 使用 HTTP 静态服务器预览 `pages`；浏览器通过 fetch 加载模块，不能直接用 file:// 打开。
+
+模拟统计按连续三星 / 连续非五星的真实长度计算（包含末尾连续段）；模拟不写入存档。
+测试中的旧 JS 参考仅对软保底、连续歪和稀有度排序做明确修正，另有独立规则断言覆盖十万次抽卡。

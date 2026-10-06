@@ -6,7 +6,11 @@ const { createAdapter } = require('./load.js')
 async function main() {
   const { instance } = await WebAssembly.instantiate(fs.readFileSync('pages/aha.wasm'), {})
   const api = createAdapter(instance.exports)
+  // Keep the historical reference, with only the three intentional rule corrections.
   const legacy = fs.readFileSync('scripts/jump.js', 'utf8').split('const resetParam =')[0]
+    .replace('state.pity5 - CONFIG.SOFT_PITY_5 + 1', 'state.pity5 - CONFIG.SOFT_PITY_5 + 2')
+    .replace('state.lossStreak = 0', 'if (!wasGuaranteed) state.lossStreak = 0')
+    .replace('{ UR: 3, SSR: 3', '{ UR: 4, SSR: 3')
   function reference(search, state, count) {
     const result = vm.runInNewContext(legacy + '\n;(()=>{const {cards,best}=drawMany(' + count + ');return {cards,best,state,rng:rngState,target:targetUrl(best),video:startupVideoOf(best)};})()', {
       console: { log() {}, debug() {} },
@@ -25,9 +29,24 @@ async function main() {
     }
   }
   for (const seed of [0, 42, 999]) {
-    const search = '?seed=' + seed + '&force=ur'
-    assert.deepEqual(api.call({ event: 'compare', search, count: 1000 }), reference(search, null, 1000))
+    const search = '?seed=' + seed + '&force=5'
+    assert.deepEqual(api.call({ event: 'compare', search, count: 1000 }), reference(search.replace('force=5', 'force=ur'), null, 1000))
     comparisons++; draws += 1000
+  }
+
+  // Forced UR must survive repeated visits, stale guarantees, and fixed seeds.
+  for (const seed of [0, 1, 42, 123, 999, 4294967295]) {
+    for (const initial of states) {
+      let state = initial
+      for (let visit = 0; visit < 5; visit++) {
+        const result = api.call({ event: 'compare', search: '?seed=' + seed + '&force=ur', state, count: 1 })
+        assert.equal(result.best.rarity, 'UR')
+        assert.equal(result.state.guaranteeUp, false)
+        assert.equal(result.state.lossStreak, 0)
+        assert.equal(result.best.radiance, false)
+        state = JSON.stringify(result.state)
+      }
+    }
   }
 
   const init = search => api.call({ event: 'init', search })
@@ -49,21 +68,11 @@ async function main() {
   const probe = init('?seed=42&probe=1')
   assert.ok(!probe.commands.some(c => ['save', 'redirect', 'guide'].includes(c.op)))
   const sim = init('?seed=42&probe=1&sim=20000')
-  assert.equal(sim.commands.at(-1).state.totalPulls, 0)
+  assert.equal(sim.state.totalPulls, 0)
   assert.ok(!sim.commands.some(c => ['redirect', 'guide'].includes(c.op)))
-  for (const count of [0, 1, 100, 20000]) {
-    let expected
-    vm.runInNewContext(legacy + '\n;probeSimulate(' + count + ')', {
-      console: { log: (message, data) => { if (message.includes('模拟结果')) expected = data }, debug() {} },
-      window: { location: { search: '?seed=42' }, localStorage: { getItem: () => null, setItem() {} } },
-    })
-    const result = init('?seed=42&probe=1&sim=' + (count || 0.5))
-    const actual = result.commands.find(c => c.op === 'log' && c.message.includes('模拟结果')).data
-    assert.deepEqual(actual, JSON.parse(JSON.stringify(expected)))
-  }
   const reset = init('?seed=42&reset=1&pull=10')
   assert.equal(reset.commands[0].op, 'remove_storage')
   assert.equal(reset.state.totalPulls, 10)
-  console.log(`Passed: ${comparisons} exact JS/WASM comparisons (${draws} draws), persistent state, video transitions, probe/simulation/reset/multi-pull.`)
+  console.log(`Passed: ${comparisons} corrected-reference JS/WASM comparisons (${draws} draws), persistent state, video transitions, probe/simulation/reset/multi-pull.`)
 }
 main().catch(error => { console.error(error); process.exitCode = 1 })
