@@ -2,6 +2,20 @@
 ;(function () {
   'use strict'
   const base = typeof document === 'undefined' ? null : new URL('.', document.currentScript.src)
+  async function readLiveStatus() {
+    const controller = new AbortController()
+    let timer
+    try {
+      return await Promise.race([
+        (async () => {
+          const response = await fetch(new URL('/live-status.json', base), { cache: 'no-store', signal: controller.signal })
+          return response.ok ? await response.json() : null
+        })(),
+        new Promise(resolve => { timer = setTimeout(() => { controller.abort(); resolve(null) }, 1000) }),
+      ])
+    } catch { return null }
+    finally { clearTimeout(timer) }
+  }
   function createAdapter(wasm, env = globalThis) {
     const encoder = new TextEncoder(), decoder = new TextDecoder()
     const doc = env.document
@@ -122,6 +136,7 @@
     if (document.prerendering) {
       await new Promise(resolve => document.addEventListener('prerenderingchange', resolve, { once: true }))
     }
+    const statusPromise = readLiveStatus()
     const response = await fetch(new URL('aha.wasm', base))
     if (!response.ok) throw new Error('WASM download failed: ' + response.status)
     const backup = response.clone()
@@ -133,6 +148,7 @@
     let state = null, storageBroken = false
     try { state = localStorage.getItem(metadata.storageKey) } catch { storageBroken = true }
     adapter.send('init', {
+      liveStatus: await statusPromise, now: Date.now(),
       state, storageBroken, search: location.search,
       entropy: (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0,
     })

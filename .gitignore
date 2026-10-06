@@ -3,3 +3,6 @@
 /pages/aha.wasm
 /wasm/target/
 /wasm/dist/
+**/.dev.vars
+**/.dev.vars.*
+**/.wrangler/

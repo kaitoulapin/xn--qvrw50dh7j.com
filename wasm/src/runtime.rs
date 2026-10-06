@@ -123,6 +123,22 @@ pub fn execute(request: &Value) -> Value {
     if event != "init" && event != "compare" {
         return SESSION.with(|s|json!({"commands":s.borrow_mut().as_mut().map(|s|s.event(event,request)).unwrap_or_default()}));
     }
+    if event == "init" {
+        let search = txt(&request["search"]);
+        let diagnostic = param(search, "probe").is_some_and(|v| v != "0" && v != "false");
+        let status = &request["liveStatus"];
+        let now = request["now"].as_u64();
+        let checked = status["checkedAt"].as_u64();
+        let expires = status["expiresAt"].as_u64();
+        if !diagnostic && status["schemaVersion"] == 1 && status["roomId"] == 42062
+            && status["liveStatus"] == 1
+            && matches!((now, checked, expires), (Some(n), Some(c), Some(e))
+                if c <= n && n < e && e > c && e - c <= 600000)
+        {
+            SESSION.with(|s| *s.borrow_mut() = None);
+            return json!({"commands":[{"op":"redirect","url":"https://live.bilibili.com/42062"}]});
+        }
+    }
     let mut engine = Engine::new(request);
     if event == "compare" {
         let count = num(&request["count"]).clamp(1.0, 200000.0) as usize;

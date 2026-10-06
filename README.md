@@ -129,3 +129,4 @@ node scripts/test-gacha-audit.js
 
 模拟统计按连续三星 / 连续非五星的真实长度计算（包含末尾连续段）；模拟不写入存档。
 测试中的旧 JS 参考仅对软保底、连续歪和稀有度排序做明确修正，另有独立规则断言覆盖十万次抽卡。
+直播优先跳转的独立状态站、Cron 发布器及部署步骤见 [cloudflare/README.md](cloudflare/README.md)。主站 Git 部署仍只更新 `mihoyo`。
