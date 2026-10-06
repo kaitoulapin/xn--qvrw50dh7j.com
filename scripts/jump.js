@@ -88,16 +88,11 @@ const STARTUP = {
 
   // 跳过提示文案（点这个提示条 = 跳过）。设成 '' 则页面上没有提示条
   SKIP_HINT: '点击此处跳过',
-
-  // 从素材的第几秒开始播（0 = 从头播）。
-  // 当前素材 0~13.5s 是纯白画面，所以从 12s 起播能跳过那段空场。
-  // 注意这是「跳播」不是「剪切」：整段素材仍会下载（本地播放无影响）。
-  START_AT: 12,
 }
 
 // 素材尺寸，仅用于「加载中」的反馈；设为 0 则完全不显示进度条
 const VIDEO_PROGRESS = {
-  BYTES: 789629, // 与 pages/video/startup-01.mp4 一致
+  BYTES: 607977, // 与 pages/video/startup-01.mp4 一致
   SHOW: true,
 }
 
@@ -108,9 +103,7 @@ const VIDEO_PROGRESS = {
 // 限定 5★ 卡池。group 指向 GROUPS 里的分组名，可选字段：
 //   video  该链接专属的启动动画（相对 pages/ 的路径）；不写就用 STARTUP.DEFAULT_VIDEO
 //   share  出货权重，默认 1；想让某条更常出就调大
-const LIMITED_CARDS = [
-  { group: '原神官网', video: 'video/startup-01.mp4' },
-]
+const LIMITED_CARDS = [{ group: '原神官网', video: 'video/startup-01.mp4' }]
 
 // 常驻池（非 UP 五星）：UP 没中的时候从这里随机
 const STANDARD_KEYS = ['FGO国服官网', '站内搜索页']
@@ -208,7 +201,8 @@ const groupMap = new Map(GROUPS.map(group => [group.name, group]))
 
 function cardsOf(group, label, allowEmpty) {
   if (!group) throw new Error(`跳转配置错误：${label} 不存在。`)
-  if (!Array.isArray(group.urls)) throw new Error(`跳转配置错误：分组「${group.name || label}」缺少 urls 数组。`)
+  if (!Array.isArray(group.urls))
+    throw new Error(`跳转配置错误：分组「${group.name || label}」缺少 urls 数组。`)
   if (group.urls.length === 0 && !allowEmpty) {
     throw new Error(`跳转配置错误：分组「${group.name || label}」没有链接。`)
   }
@@ -238,7 +232,11 @@ function collectLimited(entries, label) {
     if (!entry || typeof entry.group !== 'string') {
       throw new Error(`跳转配置错误：${label}[${index}] 缺少 group 字段。`)
     }
-    const cards = cardsOf(groupMap.get(entry.group), `${label}[${index}] 里的「${entry.group}」`, false)
+    const cards = cardsOf(
+      groupMap.get(entry.group),
+      `${label}[${index}] 里的「${entry.group}」`,
+      false,
+    )
     const video = entry.video === undefined ? null : entry.video
     if (video !== null && (typeof video !== 'string' || video.trim() === '')) {
       throw new Error(`跳转配置错误：${label}[${index}] 的 video 必须是非空字符串或省略。`)
@@ -268,18 +266,29 @@ function pickFromPlan(plan) {
   return pickFrom(plan.cards)
 }
 
-const LIMITED_POOL = collectLimited(LIMITED_CARDS, 'LIMITED_CARDS').map(card => ({ ...card, rarity: 'UR' }))
+const LIMITED_POOL = collectLimited(LIMITED_CARDS, 'LIMITED_CARDS').map(card => ({
+  ...card,
+  rarity: 'UR',
+}))
 const LIMITED_PLAN = poolPlan(LIMITED_POOL, [], 0)
 
-const STANDARD_POOL = collect(STANDARD_KEYS, 'STANDARD_KEYS').map(card => ({ ...card, rarity: 'SSR' }))
+const STANDARD_POOL = collect(STANDARD_KEYS, 'STANDARD_KEYS').map(card => ({
+  ...card,
+  rarity: 'SSR',
+}))
 const STANDARD_PLAN = poolPlan(STANDARD_POOL, [], 0)
 
-const PREFERRED_POOL = collect(PREFERRED_KEYS, 'PREFERRED_KEYS').map(card => ({ ...card, rarity: 'SR' }))
-const PREFERRED_UP = collect(PREFERRED_UP_KEYS, 'PREFERRED_UP_KEYS', { allowEmpty: true }).map(card => ({
+const PREFERRED_POOL = collect(PREFERRED_KEYS, 'PREFERRED_KEYS').map(card => ({
   ...card,
   rarity: 'SR',
-  up: true,
 }))
+const PREFERRED_UP = collect(PREFERRED_UP_KEYS, 'PREFERRED_UP_KEYS', { allowEmpty: true }).map(
+  card => ({
+    ...card,
+    rarity: 'SR',
+    up: true,
+  }),
+)
 const PREFERRED_PLAN = poolPlan(PREFERRED_POOL, PREFERRED_UP, CONFIG.UP_SHARE)
 
 // 3★ 的两个子池都从 FILLER_GROUPS 里按分组名取，所以 UP 组和其余组是同一个写法
@@ -314,7 +323,11 @@ if (!Number.isFinite(CONFIG.UP_SHARE) || CONFIG.UP_SHARE < 0 || CONFIG.UP_SHARE 
 if (!FILLER_PLAN.all.length) {
   // 用 debug 级别，避免每次打开网站都在控制台刷一条警告
   const warn = console.debug || console.log
-  warn('[卡池] 3★ 池为空，相关结果会降级为 4★ 或 ' + FALLBACK_URL + '。往 FILLER_GROUPS 里填链接即可启用。')
+  warn(
+    '[卡池] 3★ 池为空，相关结果会降级为 4★ 或 ' +
+      FALLBACK_URL +
+      '。往 FILLER_GROUPS 里填链接即可启用。',
+  )
 }
 
 // 这张卡要播哪个启动动画（没有就返回 null = 直接跳转）
@@ -344,7 +357,8 @@ function readParam(name) {
 const seedText = readParam('seed')
 const seedNumber = seedText === null ? NaN : Number(seedText)
 const forcedSeed = Number.isFinite(seedNumber) ? seedNumber >>> 0 : null
-let rngState = (forcedSeed === null ? Date.now() ^ Math.floor(Math.random() * 0xffffffff) : forcedSeed) >>> 0
+let rngState =
+  (forcedSeed === null ? Date.now() ^ Math.floor(Math.random() * 0xffffffff) : forcedSeed) >>> 0
 
 // ?force=ur 强制本次抽中限定 5★（只为调试启动动画，正常访客不会用到）
 const forceRarity = (readParam('force') || '').toLowerCase()
@@ -393,7 +407,8 @@ function loadState() {
   }
   if (!saved || saved.version !== 2) return state
 
-  const number = (value, fallback) => (Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback)
+  const number = (value, fallback) =>
+    Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback
   state.totalPulls = number(saved.totalPulls, 0)
   state.pity5 = number(saved.pity5, 0)
   state.pity4 = number(saved.pity4, 0)
@@ -464,7 +479,8 @@ function fiveStarRate(state) {
 function roll5Star() {
   const pity = state.pity5
   const wasGuaranteed = state.guaranteeUp
-  const upRate = state.lossStreak >= CONFIG.RADIANCE_LOSSES ? CONFIG.RADIANCE_UP_RATE : CONFIG.UP_RATE
+  const upRate =
+    state.lossStreak >= CONFIG.RADIANCE_LOSSES ? CONFIG.RADIANCE_UP_RATE : CONFIG.UP_RATE
   const radiance = !wasGuaranteed && upRate > CONFIG.UP_RATE
 
   if (wasGuaranteed || random() < upRate) {
@@ -632,24 +648,6 @@ function playStartupVideo(videoPath, next) {
     video.appendChild(source)
     root.appendChild(video)
 
-    // 从 START_AT 秒开始播（跳过素材开头的空场）。
-    // 必须在元数据就绪后才设 currentTime，否则部分浏览器会忽略或抛错。
-    const startAt = Number.isFinite(STARTUP.START_AT) && STARTUP.START_AT > 0 ? STARTUP.START_AT : 0
-    const seekToStart = () => {
-      if (!startAt) return
-      // 起点超过素材长度就退回从头播，避免直接判定为播放结束
-      if (Number.isFinite(video.duration) && startAt >= video.duration - 0.5) {
-        logStartup('START_AT (' + startAt + 's) 超出素材长度 (' + video.duration.toFixed(1) + 's)，改为从头播放')
-        return
-      }
-      try {
-        video.currentTime = startAt
-        logStartup('从第 ' + startAt + ' 秒开始播放')
-      } catch {
-        /* 忽略：个别浏览器此时还不可 seek */
-      }
-    }
-
     // 右上角的提示条：显示跳过入口；声音被拦下时这里也提示「点击任意处开启声音」
     let hint = null
     if (typeof STARTUP.SKIP_HINT === 'string' && STARTUP.SKIP_HINT.trim() !== '') {
@@ -685,7 +683,9 @@ function playStartupVideo(videoPath, next) {
 
     const syncHint = () => {
       if (!hint) return
-      hint.textContent = soundBlocked ? '🔇 点击任意处开声音　·　' + STARTUP.SKIP_HINT : STARTUP.SKIP_HINT
+      hint.textContent = soundBlocked
+        ? '🔇 点击任意处开声音　·　' + STARTUP.SKIP_HINT
+        : STARTUP.SKIP_HINT
     }
 
     const markSoundBlocked = reason => {
@@ -702,7 +702,7 @@ function playStartupVideo(videoPath, next) {
       syncHint()
     }
 
-    // 用户第一次点击/按键：解除静音 + 回到起点重播（起点是 START_AT，不是 0）
+    // 用户第一次点击/按键：解除静音 + 从头重播
     const unlockSound = event => {
       if (soundResolved && !soundBlocked) return
       if (STARTUP.MUTED === true) return
@@ -712,7 +712,7 @@ function playStartupVideo(videoPath, next) {
       video.muted = false
       video.volume = 1
       try {
-        video.currentTime = startAt
+        video.currentTime = 0
       } catch {
         /* 忽略：元数据还没就绪时部分浏览器会抛错 */
       }
@@ -720,7 +720,7 @@ function playStartupVideo(videoPath, next) {
       if (attempt && typeof attempt.catch === 'function') {
         attempt.catch(error => logStartup('点击后仍无法带声音播放', String(error && error.name)))
       }
-      logStartup('用户交互，已开启声音并从第 ' + startAt + ' 秒重播')
+      logStartup('用户交互，已开启声音并从头重播')
       syncHint()
     }
     ;['click', 'touchend', 'keydown'].forEach(type => {
@@ -766,11 +766,6 @@ function playStartupVideo(videoPath, next) {
     })
     video.addEventListener('playing', dropLoader)
 
-    // 元数据就绪后跳到 START_AT（已知时长时一次性生效）
-    const seekOnce = once(seekToStart)
-    if (video.readyState >= 1) seekOnce()
-    else video.addEventListener('loadedmetadata', seekOnce)
-
     // 播放确实开始后再计时，避免把「加载慢」当成「播放时长」
     let timer = null
     video.addEventListener('playing', () => {
@@ -782,7 +777,10 @@ function playStartupVideo(videoPath, next) {
     })
     video.addEventListener('ended', go)
     video.addEventListener('error', () => {
-      logStartup('素材加载或解码失败', video.error ? 'MediaError code ' + video.error.code : videoPath)
+      logStartup(
+        '素材加载或解码失败',
+        video.error ? 'MediaError code ' + video.error.code : videoPath,
+      )
       go()
     })
     // 兜底：连 playing 都没等到（网络挂起 / 自动播放被拒）也要能跳走
@@ -808,7 +806,10 @@ function playStartupVideo(videoPath, next) {
           const retry = video.play()
           if (retry && typeof retry.catch === 'function') {
             retry.catch(secondError => {
-              logStartup('静音重试仍然失败，等待兜底跳转', String((secondError && secondError.name) || secondError))
+              logStartup(
+                '静音重试仍然失败，等待兜底跳转',
+                String((secondError && secondError.name) || secondError),
+              )
             })
           }
           return
@@ -861,7 +862,15 @@ function probeOnce() {
 
 function probeSimulate(times) {
   const snapshot = JSON.stringify(state)
-  const stats = { 五星: 0, 四星: 0, 三星: 0, 限定UP: 0, 常驻歪: 0, 最长连续三星: 0, 最长未出五星: 0 }
+  const stats = {
+    五星: 0,
+    四星: 0,
+    三星: 0,
+    限定UP: 0,
+    常驻歪: 0,
+    最长连续三星: 0,
+    最长未出五星: 0,
+  }
   let sinceFive = 0
   let sinceFour = 0
   let firstFive = null
@@ -911,6 +920,38 @@ function probeSimulate(times) {
 // 主流程
 // ---------------------------------------------------------------------------
 
+// 引导页完全由 JS 生成；仅 UR 配有视频时调用。
+function createStartupGuide() {
+  if (!document.body) return null
+  const root = document.createElement('div')
+  root.id = 'startup-guide'
+  root.innerHTML = `<style>
+      :root { color-scheme: light; color: #000; background: #fff; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; min-height: 100svh; display: grid; place-items: center; padding: 48px 24px; }
+      main { width: min(640px, 100%); }
+      .ticket { width: 104px; height: 128px; border: 2px solid #000; border-radius: 14px; display: grid; place-items: center; transform: rotate(-8deg); margin: 0 0 44px 8px; box-shadow: 8px 8px 0 #000; }
+      .ticket span { font: 700 64px/1 monospace; }
+      h1 { margin: 0; font-size: clamp(36px, 7vw, 56px); line-height: 1.25; letter-spacing: -.05em; font-weight: 800; }
+      h1 span { display: block; }
+      p { margin: 24px 0 36px; font-size: 16px; line-height: 1.9; }
+      button { width: 100%; min-height: 64px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 24px; border: 2px solid #000; border-radius: 14px; background: #000; color: #fff; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+      button:not(:disabled):hover { background: #fff; color: #000; }
+      button:focus-visible { outline: 2px solid #000; outline-offset: 6px; }
+      button:disabled { cursor: wait; }
+      .arrow { font-size: 24px; }
+      .note { margin: 16px 0 0; font-size: 12px; }
+      @media (max-width: 480px) { .ticket { width: 80px; height: 100px; margin-bottom: 36px; } .ticket span { font-size: 48px; } }
+    </style><main>
+      <div class="ticket" aria-hidden="true"><span>?</span></div>
+      <h1><span>金光已经亮了。</span><span>该你启动了。</span></h1>
+      <p>恭喜，抽中了限定 UR。<br />点一下屏幕，让启动动画带你去下一站。</p>
+      <button id="open-surprise" type="button" disabled><span id="open-label">点击，启动！</span><span class="arrow" aria-hidden="true">↗</span></button>
+    </main>`
+  document.body.appendChild(root)
+  return root
+}
+
 const resetParam = readParam('reset')
 if (resetParam === '1' || resetParam === 'true') {
   try {
@@ -925,22 +966,46 @@ if (resetParam === '1' || resetParam === 'true') {
 const probeParam = readParam('probe')
 if (probeParam !== null && probeParam !== '0' && probeParam !== 'false') {
   const simCount = Number(readParam('sim'))
-  if (Number.isFinite(simCount) && simCount > 0) probeSimulate(Math.min(200000, Math.floor(simCount)))
+  if (Number.isFinite(simCount) && simCount > 0)
+    probeSimulate(Math.min(200000, Math.floor(simCount)))
   else probeOnce()
 } else {
   const pullParam = Number(readParam('pull'))
   const pullCount =
-    Number.isFinite(pullParam) && pullParam > 1 ? Math.min(CONFIG.MAX_PULLS, Math.floor(pullParam)) : 1
+    Number.isFinite(pullParam) && pullParam > 1
+      ? Math.min(CONFIG.MAX_PULLS, Math.floor(pullParam))
+      : 1
   const { cards, best } = drawMany(pullCount)
-  // 先存档再播动画：否则看动画时一刷新就能重新抽，保底会失效
+  // 立即抽卡存档；引导页只等待播放，不会重新抽卡。
   saveState(state)
   if (pullCount > 1) console.log('[卡池] ' + pullCount + ' 连', cards.map(describe))
-
   const destination = targetUrl(best)
   const video = startupVideoOf(best)
-  if (video) console.log('[卡池] 限定 5★ 出货，先播放启动动画：' + video)
-
-  // 动画会接管跳转；没配动画或 DOM 不可用则立刻跳转
-  const handled = video ? playStartupVideo(video, () => window.location.replace(destination)) : false
-  if (!handled) window.location.replace(destination)
+  const redirect = () => window.location.replace(destination)
+  if (best.rarity !== 'UR' || !video || typeof document === 'undefined') {
+    redirect()
+  } else {
+    const showGuide = () => {
+      const guide = createStartupGuide()
+      if (!guide) {
+        redirect()
+        return
+      }
+      const button = guide.querySelector('#open-surprise')
+      button.disabled = false
+      const begin = once(() => {
+        button.disabled = true
+        guide.querySelector('#open-label').textContent = '正在启动…'
+        guide.querySelector('#entry-note').textContent = '动画加载中，请稍候。'
+        // 点击事件内同步调用 play，保留用户激活状态。
+        if (!playStartupVideo(video, redirect)) redirect()
+      })
+      document.addEventListener('click', begin, { once: true })
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', showGuide, { once: true })
+    } else {
+      showGuide()
+    }
+  }
 }
