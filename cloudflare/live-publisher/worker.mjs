@@ -7,19 +7,42 @@ async function boundedFetch(fetcher, url, options, timeout) {
   const timer = setTimeout(() => controller.abort(), timeout)
   try {
     const response = await fetcher(url, { ...options, signal: controller.signal })
-    const body = await response.json()
+    let body
+    try { body = await response.json() }
+    catch {
+      const error = new Error('Invalid upstream JSON')
+      error.httpStatus = response.status
+      throw error
+    }
     return { response, body }
   } finally { clearTimeout(timer) }
 }
 
-export async function queryStatus(fetcher = fetch, now = Date.now) {
+export async function queryStatus(fetcher = fetch, now = Date.now, report = message => console.warn(message)) {
   let liveStatus = null
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    'Referer': 'https://live.bilibili.com/42062',
+    'Accept': 'application/json, text/plain, */*',
+  }
+  const deadline = Date.now() + 3000
+  for (const endpoint of ['room_init?id=42062', 'get_info?room_id=42062']) {
+  const remaining = deadline - Date.now()
+  if (remaining <= 0) break
   try {
     const { response, body } = await boundedFetch(fetcher,
-      'https://api.live.bilibili.com/room/v1/Room/room_init?id=42062', {}, 3000)
+      `https://api.live.bilibili.com/room/v1/Room/${endpoint}`, { headers, redirect: 'error' }, remaining)
     if (response.ok && body.code === 0 && body.data?.room_id === 42062
-        && [0, 1, 2].includes(body.data.live_status)) liveStatus = body.data.live_status
-  } catch {}
+        && [0, 1, 2].includes(body.data.live_status)) { liveStatus = body.data.live_status; break }
+    else {
+      const code = Number.isInteger(body?.code) ? body.code : 'invalid'
+      report(`Live query rejected: HTTP ${response.status}; API code ${code}; room match ${body?.data?.room_id === 42062}; valid status ${[0, 1, 2].includes(body?.data?.live_status)}`)
+    }
+  } catch (error) {
+    const reason = error.name === 'AbortError' ? 'timeout' : Number.isInteger(error.httpStatus) ? `invalid JSON; HTTP ${error.httpStatus}` : 'network failure'
+    report(`Live query failed: ${reason}`)
+  }
+  }
   const checkedAt = now()
   return { schemaVersion: 1, roomId: 42062, liveStatus, checkedAt, expiresAt: checkedAt + 600000 }
 }

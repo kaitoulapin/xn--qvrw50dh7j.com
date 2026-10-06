@@ -29,6 +29,20 @@ for (const liveStatus of [0, 1, 2, 3, '1', null]) {
 }
 assert.equal((await queryStatus(async () => { throw new Error('network') })).liveStatus, null)
 assert.equal((await queryStatus(async () => Response.json({ code: -1 }))).liveStatus, null)
+let attempts = 0
+const recovered = await queryStatus(async (url, options) => {
+  assert.equal(options.headers.Referer, 'https://live.bilibili.com/42062')
+  assert.ok(options.headers['User-Agent'])
+  assert.equal(options.headers.Cookie, undefined)
+  attempts++
+  if (attempts === 1) return new Response('<html>blocked</html>', { status: 412 })
+  assert.match(url, /get_info\?room_id=42062$/)
+  return Response.json({ code: 0, data: { room_id: 42062, live_status: 1 } })
+}, () => now, () => {})
+assert.equal(attempts, 2)
+assert.equal(recovered.liveStatus, 1)
+const rejected = await queryStatus(async () => new Response('blocked', { status: 412 }), () => now, () => {})
+assert.equal(rejected.liveStatus, null)
 const env = { CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32), CLOUDFLARE_API_TOKEN: 'private-token' }
 for (const failAt of [0, 1, 2, -1]) {
   let step = 0, manifest
