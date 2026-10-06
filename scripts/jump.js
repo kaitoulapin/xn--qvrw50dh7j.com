@@ -88,6 +88,11 @@ const STARTUP = {
 
   // 跳过提示文案（点这个提示条 = 跳过）。设成 '' 则页面上没有提示条
   SKIP_HINT: '点击此处跳过',
+
+  // 从素材的第几秒开始播（0 = 从头播）。
+  // 当前素材 0~13.5s 是纯白画面，所以从 12s 起播能跳过那段空场。
+  // 注意这是「跳播」不是「剪切」：整段素材仍会下载（本地播放无影响）。
+  START_AT: 12,
 }
 
 // 素材尺寸，仅用于「加载中」的反馈；设为 0 则完全不显示进度条
@@ -627,6 +632,24 @@ function playStartupVideo(videoPath, next) {
     video.appendChild(source)
     root.appendChild(video)
 
+    // 从 START_AT 秒开始播（跳过素材开头的空场）。
+    // 必须在元数据就绪后才设 currentTime，否则部分浏览器会忽略或抛错。
+    const startAt = Number.isFinite(STARTUP.START_AT) && STARTUP.START_AT > 0 ? STARTUP.START_AT : 0
+    const seekToStart = () => {
+      if (!startAt) return
+      // 起点超过素材长度就退回从头播，避免直接判定为播放结束
+      if (Number.isFinite(video.duration) && startAt >= video.duration - 0.5) {
+        logStartup('START_AT (' + startAt + 's) 超出素材长度 (' + video.duration.toFixed(1) + 's)，改为从头播放')
+        return
+      }
+      try {
+        video.currentTime = startAt
+        logStartup('从第 ' + startAt + ' 秒开始播放')
+      } catch {
+        /* 忽略：个别浏览器此时还不可 seek */
+      }
+    }
+
     // 右上角的提示条：显示跳过入口；声音被拦下时这里也提示「点击任意处开启声音」
     let hint = null
     if (typeof STARTUP.SKIP_HINT === 'string' && STARTUP.SKIP_HINT.trim() !== '') {
@@ -679,7 +702,7 @@ function playStartupVideo(videoPath, next) {
       syncHint()
     }
 
-    // 用户第一次点击/按键：解除静音 + 从头重播
+    // 用户第一次点击/按键：解除静音 + 回到起点重播（起点是 START_AT，不是 0）
     const unlockSound = event => {
       if (soundResolved && !soundBlocked) return
       if (STARTUP.MUTED === true) return
@@ -689,7 +712,7 @@ function playStartupVideo(videoPath, next) {
       video.muted = false
       video.volume = 1
       try {
-        video.currentTime = 0
+        video.currentTime = startAt
       } catch {
         /* 忽略：元数据还没就绪时部分浏览器会抛错 */
       }
@@ -697,7 +720,7 @@ function playStartupVideo(videoPath, next) {
       if (attempt && typeof attempt.catch === 'function') {
         attempt.catch(error => logStartup('点击后仍无法带声音播放', String(error && error.name)))
       }
-      logStartup('用户交互，已开启声音并从头重播')
+      logStartup('用户交互，已开启声音并从第 ' + startAt + ' 秒重播')
       syncHint()
     }
     ;['click', 'touchend', 'keydown'].forEach(type => {
@@ -742,6 +765,11 @@ function playStartupVideo(videoPath, next) {
       }
     })
     video.addEventListener('playing', dropLoader)
+
+    // 元数据就绪后跳到 START_AT（已知时长时一次性生效）
+    const seekOnce = once(seekToStart)
+    if (video.readyState >= 1) seekOnce()
+    else video.addEventListener('loadedmetadata', seekOnce)
 
     // 播放确实开始后再计时，避免把「加载慢」当成「播放时长」
     let timer = null
