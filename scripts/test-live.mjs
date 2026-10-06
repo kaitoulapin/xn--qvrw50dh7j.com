@@ -31,6 +31,7 @@ assert.equal((await queryStatus(async () => { throw new Error('network') })).liv
 assert.equal((await queryStatus(async () => Response.json({ code: -1 }))).liveStatus, null)
 let attempts = 0
 const recovered = await queryStatus(async (url, options) => {
+  assert.equal(options.redirect, 'manual')
   assert.equal(options.headers.Referer, 'https://live.bilibili.com/42062')
   assert.ok(options.headers['User-Agent'])
   assert.equal(options.headers.Cookie, undefined)

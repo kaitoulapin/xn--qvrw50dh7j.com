@@ -31,16 +31,17 @@ export async function queryStatus(fetcher = fetch, now = Date.now, report = mess
   if (remaining <= 0) break
   try {
     const { response, body } = await boundedFetch(fetcher,
-      `https://api.live.bilibili.com/room/v1/Room/${endpoint}`, { headers, redirect: 'error' }, remaining)
+      `https://api.live.bilibili.com/room/v1/Room/${endpoint}`, { headers, redirect: 'manual' }, remaining)
     if (response.ok && body.code === 0 && body.data?.room_id === 42062
         && [0, 1, 2].includes(body.data.live_status)) { liveStatus = body.data.live_status; break }
     else {
       const code = Number.isInteger(body?.code) ? body.code : 'invalid'
-      report(`Live query rejected: HTTP ${response.status}; API code ${code}; room match ${body?.data?.room_id === 42062}; valid status ${[0, 1, 2].includes(body?.data?.live_status)}`)
+      report(`Live query rejected (${endpoint}): HTTP ${response.status}; API code ${code}; room match ${body?.data?.room_id === 42062}; valid status ${[0, 1, 2].includes(body?.data?.live_status)}`)
     }
   } catch (error) {
     const reason = error.name === 'AbortError' ? 'timeout' : Number.isInteger(error.httpStatus) ? `invalid JSON; HTTP ${error.httpStatus}` : 'network failure'
-    report(`Live query failed: ${reason}`)
+    const detail = String(error?.message || '').replace(/https?:\/\/[^\s]+/g, '[URL]').replace(/[\r\n]/g, ' ').slice(0, 240)
+    report(`Live query failed (${endpoint}): ${reason}; ${detail}`)
   }
   }
   const checkedAt = now()
