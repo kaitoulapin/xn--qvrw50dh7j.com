@@ -945,7 +945,6 @@ function createStartupGuide() {
     </style><main>
       <div class="ticket" aria-hidden="true"><span>?</span></div>
       <h1><span>金光已经亮了。</span><span>该你启动了。</span></h1>
-      <p>恭喜，抽中了限定 UR。<br />点一下屏幕，让启动动画带你去下一站。</p>
       <button id="open-surprise" type="button" disabled><span id="open-label">点击，启动！</span><span class="arrow" aria-hidden="true">↗</span></button>
     </main>`
   document.body.appendChild(root)
