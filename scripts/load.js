@@ -148,4 +148,4 @@
     document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', show, { once: true }) : show()
   })
 })()
-// 诶嘿，还是不给你看~
+// 诶嘿，骗你的，还是不给你看~
