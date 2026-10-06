@@ -31,6 +31,31 @@ if (path.resolve(input) === path.resolve(output)) {
 const source = fs.readFileSync(input, "utf8");
 new vm.Script(source, { filename: input });
 
+// 启动动画素材校验：配置里写了 video 却在发布目录里找不到文件，构建直接失败。
+// 宁可构建红掉，也不要在线上被抽中时才发现动画放不出来。
+const assetsDir = path.join(__dirname, "..", "pages");
+const referenced = new Set(
+    [...source.matchAll(/(?:video|src|VIDEO)\s*[:=]\s*['"]([^'"]+\.(?:mp4|webm|mov|m4v))['"]/gi)]
+        .map((match) => match[1])
+);
+const missing = [];
+for (const ref of referenced) {
+    const file = path.resolve(assetsDir, ref.replace(/^\.?\//, ""));
+    if (!file.startsWith(path.resolve(assetsDir))) {
+        console.error(`启动动画路径越界（必须放在 pages 目录内）: ${ref}`);
+        process.exit(1);
+    }
+    if (!fs.existsSync(file)) missing.push({ ref, file });
+}
+if (missing.length) {
+    console.error("启动动画素材缺失，构建中止：");
+    for (const item of missing) console.error(`  ${item.ref}  ->  找不到 ${item.file}`);
+    process.exit(1);
+}
+if (referenced.size) {
+    console.log(`启动动画素材校验通过（${referenced.size} 个引用）`);
+}
+
 // 混淆用于增加分析成本，不是加密保密。保留原始文件以便修改。
 // 每块独立使用随机种子做字节变换，反转后编码，再打乱块顺序。
 const bytes = Buffer.from(source, "utf8");
