@@ -22,28 +22,26 @@ for (const search of ['?probe=1', '?probe=1&sim=100']) {
   const result = call({ search, liveStatus: live })
   assert.equal(result.commands.some(c => c.op === 'redirect'), false)
 }
-for (const liveStatus of [0, 1, 2, 3, '1', null]) {
-  const status = await queryStatus(async () => Response.json({ code: 0, data: { room_id: 42062, live_status: liveStatus } }), () => now)
-  assert.equal(status.liveStatus, [0, 1, 2].includes(liveStatus) ? liveStatus : null)
+for (const isLiving of [true, false]) {
+  const status = await queryStatus(async (url, options) => {
+    assert.equal(url, 'https://api.ukamnads.icu/api/v2/channel?uId=730732&includeLive=false&includeExtra=false')
+    assert.equal(options.redirect, 'manual')
+    assert.equal(options.headers.Cookie, undefined)
+    return Response.json({ code: 200, data: { channel: { uId: 730732, roomId: 42062, isLiving } } })
+  }, () => now, () => {})
+  assert.equal(status.liveStatus, isLiving ? 1 : 0)
   assert.equal(status.expiresAt, now + 600000)
 }
-assert.equal((await queryStatus(async () => { throw new Error('network') })).liveStatus, null)
-assert.equal((await queryStatus(async () => Response.json({ code: -1 }))).liveStatus, null)
-let attempts = 0
-const recovered = await queryStatus(async (url, options) => {
-  assert.equal(options.redirect, 'manual')
-  assert.equal(options.headers.Referer, 'https://live.bilibili.com/42062')
-  assert.ok(options.headers['User-Agent'])
-  assert.equal(options.headers.Cookie, undefined)
-  attempts++
-  if (attempts === 1) return new Response('<html>blocked</html>', { status: 412 })
-  assert.match(url, /get_info\?room_id=42062$/)
-  return Response.json({ code: 0, data: { room_id: 42062, live_status: 1 } })
-}, () => now, () => {})
-assert.equal(attempts, 2)
-assert.equal(recovered.liveStatus, 1)
-const rejected = await queryStatus(async () => new Response('blocked', { status: 412 }), () => now, () => {})
-assert.equal(rejected.liveStatus, null)
+for (const channel of [null, {}, { uId: 730732, roomId: 42062, isLiving: 'true' },
+  { uId: 1, roomId: 42062, isLiving: true }, { uId: 730732, roomId: 1, isLiving: true },
+  { uId: 730732, roomId: 42062, isLiving: true, isDeleted: true }]) {
+  assert.equal((await queryStatus(async () => Response.json({ code: 200, data: { channel } }), () => now, () => {})).liveStatus, null)
+}
+for (const fetcher of [async () => { throw new Error('network') },
+  async () => new Response('blocked', { status: 403 }),
+  async () => Response.json({ code: 500, data: {} })]) {
+  assert.equal((await queryStatus(fetcher, () => now, () => {})).liveStatus, null)
+}
 const env = { CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32), CLOUDFLARE_API_TOKEN: 'private-token' }
 for (const failAt of [0, 1, 2, -1]) {
   let step = 0, manifest
@@ -72,4 +70,4 @@ for (const failAt of [0, 1, 2, -1]) {
   if (failAt < 0) await publishStatus(env, live, fetcher)
   else { await assert.rejects(publishStatus(env, live, fetcher), /publish step failed/); assert.equal(step, failAt + 1) }
 }
-console.log('Passed: live priority, untouched pity/reset, stale/invalid fallback, diagnostics, Bili parsing, isolated atomic uploads and failure handling.')
+console.log('Passed: live priority, untouched pity/reset, stale/invalid fallback, diagnostics, Danmakus parsing, isolated atomic uploads and failure handling.')

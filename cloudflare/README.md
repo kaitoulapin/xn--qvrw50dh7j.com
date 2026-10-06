@@ -37,13 +37,13 @@ Route 仍需按网页步骤配置。后续使用 Wrangler 时先同步控制台�
 
 ## 工作方式与验收
 
-Cron 每 5 分钟无登录查询 B 站，3 秒超时；结果有效 10 分钟。无效响应发布未知状态；发布失败保留上一版本，下次重试。发布器通过资源清单、上传、原子 PUT 部署，只触及状态站；`_headers` 通过 API 资源配置传入，不当作公开资源上传。
+Cron 每 5 分钟无登录查询 Danmakus 公开频道 API，3 秒超时；结果有效 10 分钟。无效响应发布未知状态；发布失败保留上一版本，下次重试。发布器通过资源清单、上传、原子 PUT 部署，只触及状态站；`_headers` 通过 API 资源配置传入，不当作公开资源上传。
 
 浏览器并行获取 WASM 和同源状态，状态最多等待 1 秒。Rust 只接受未过期且检查时间不在未来的直播结果。直播优先于 force/reset/pull，不修改保底；probe/compare 诊断保持原行为。服务器或本地浏览器时钟不准会保守回退抽卡。
 
 本地 `node scripts/test-live.mjs`、`node scripts/test-wasm-host.js` 验证核心流程。用 `npx wrangler dev --test-scheduled --config cloudflare/live-publisher/wrangler.jsonc` 可触发本地 scheduled，但提供真实凭据后会**真实发布状态站**，仅在准备好上线时使用。
 
-上线后检查：JSON 响应头；浏览器无 B 站请求；直播访问保底不变；主站推送与状态发布不会互相回退；访问量增加时发布器的执行量仍约每天 288 次。账户凭据未配置时本地模拟测试无法代替这些线上验收。
+上线后检查：JSON 响应头；浏览器无 B 站或 Danmakus 请求；直播访问保底不变；主站推送与状态发布不会互相回退；访问量增加时发布器的执行量仍约每天 288 次。账户凭据未配置时本地模拟测试无法代替这些线上验收。
 
 ## 停用与费用
 
@@ -52,3 +52,9 @@ Cron 每 5 分钟无登录查询 B 站，3 秒超时；结果有效 10 分钟。
 静态资源访问免费，发布器使用账号共享 Workers Free 额度；不引入 R2/KV/GitHub Actions。不要主动升级 Paid。免费计划、API 限速和 Cron 调度仍受 Cloudflare 规则约束，不保证永久价格或严格 5 分钟 SLA。
 
 参考：[资源上传](https://developers.cloudflare.com/workers/static-assets/direct-upload/)、[API 上传参数](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/update/)、[静态计费](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/)。
+
+## Danmakus 数据源
+
+发布器现在请求 `https://api.ukamnads.icu/api/v2/channel?uId=730732&includeLive=false&includeExtra=false`（Danmakus 前端使用的公开频道 API），只读取 `data.channel.isLiving`。同时校验 UID 730732、房间号 42062、布尔字段及成功码 200；开播映射为 1，未开播映射为 0，异常为 null。不再请求 B 站首页、设备 Cookie 或直播接口，不需要新增 Secret。
+
+控制台使用者只需完整替换 `cloudflare/live-publisher/worker.mjs` 并 Deploy，已有 Route、Secret、Cron 和主站无需修改。第三方接口可能变更或受访问限制；本地成功不保证 Workers 出口成功。`checkedAt` 是本次查询时间，不能证明上游直播状态刚更新，第三方延迟叠加 Cron 延迟。接口失败保持未知状态回退抽卡。

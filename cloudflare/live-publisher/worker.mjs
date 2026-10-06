@@ -20,29 +20,22 @@ async function boundedFetch(fetcher, url, options, timeout) {
 
 export async function queryStatus(fetcher = fetch, now = Date.now, report = message => console.warn(message)) {
   let liveStatus = null
-  const headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-    'Referer': 'https://live.bilibili.com/42062',
-    'Accept': 'application/json, text/plain, */*',
-  }
-  const deadline = Date.now() + 3000
-  for (const endpoint of ['room_init?id=42062', 'get_info?room_id=42062']) {
-  const remaining = deadline - Date.now()
-  if (remaining <= 0) break
   try {
     const { response, body } = await boundedFetch(fetcher,
-      `https://api.live.bilibili.com/room/v1/Room/${endpoint}`, { headers, redirect: 'manual' }, remaining)
-    if (response.ok && body.code === 0 && body.data?.room_id === 42062
-        && [0, 1, 2].includes(body.data.live_status)) { liveStatus = body.data.live_status; break }
-    else {
-      const code = Number.isInteger(body?.code) ? body.code : 'invalid'
-      report(`Live query rejected (${endpoint}): HTTP ${response.status}; API code ${code}; room match ${body?.data?.room_id === 42062}; valid status ${[0, 1, 2].includes(body?.data?.live_status)}`)
+      'https://api.ukamnads.icu/api/v2/channel?uId=730732&includeLive=false&includeExtra=false',
+      { headers: { Accept: 'application/json' }, redirect: 'manual', cache: 'no-store' }, 3000)
+    const channel = body?.data?.channel
+    if (response.ok && body?.code === 200 && channel?.uId === 730732
+        && channel.roomId === 42062 && channel.isDeleted !== true
+        && typeof channel.isLiving === 'boolean') {
+      liveStatus = channel.isLiving ? 1 : 0
+    } else {
+      report(`Danmakus query rejected: HTTP ${response.status}; API code ${Number.isInteger(body?.code) ? body.code : 'invalid'}`)
     }
   } catch (error) {
     const reason = error.name === 'AbortError' ? 'timeout' : Number.isInteger(error.httpStatus) ? `invalid JSON; HTTP ${error.httpStatus}` : 'network failure'
     const detail = String(error?.message || '').replace(/https?:\/\/[^\s]+/g, '[URL]').replace(/[\r\n]/g, ' ').slice(0, 240)
-    report(`Live query failed (${endpoint}): ${reason}; ${detail}`)
-  }
+    report(`Danmakus query failed: ${reason}; ${detail}`)
   }
   const checkedAt = now()
   return { schemaVersion: 1, roomId: 42062, liveStatus, checkedAt, expiresAt: checkedAt + 600000 }
