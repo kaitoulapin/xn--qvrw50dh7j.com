@@ -1,0 +1,22 @@
+<style>
+      :root { color-scheme: light; color: #000; background: #fff; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; min-height: 100svh; display: grid; place-items: center; padding: 48px 24px; }
+      main { width: min(640px, 100%); }
+      .ticket { width: 104px; height: 128px; border: 2px solid #000; border-radius: 14px; display: grid; place-items: center; transform: rotate(-8deg); margin: 0 0 44px 8px; box-shadow: 8px 8px 0 #000; }
+      .ticket span { font: 700 64px/1 monospace; }
+      h1 { margin: 0; font-size: clamp(36px, 7vw, 56px); line-height: 1.25; letter-spacing: -.05em; font-weight: 800; }
+      h1 span { display: block; }
+      p { margin: 24px 0 36px; font-size: 16px; line-height: 1.9; }
+      button { width: 100%; min-height: 64px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 24px; border: 2px solid #000; border-radius: 14px; background: #000; color: #fff; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+      button:not(:disabled):hover { background: #fff; color: #000; }
+      button:focus-visible { outline: 2px solid #000; outline-offset: 6px; }
+      button:disabled { cursor: wait; }
+      .arrow { font-size: 24px; }
+      .note { margin: 16px 0 0; font-size: 12px; }
+      @media (max-width: 480px) { .ticket { width: 80px; height: 100px; margin-bottom: 36px; } .ticket span { font-size: 48px; } }
+    </style><main>
+      <div class="ticket" aria-hidden="true"><span>?</span></div>
+      <h1><span>金光已经亮了。</span><span>该你启动了。</span></h1>
+      <button id="open-surprise" type="button" disabled><span id="open-label">点击，启动！</span><span class="arrow" aria-hidden="true">↗</span></button>
+    </main>

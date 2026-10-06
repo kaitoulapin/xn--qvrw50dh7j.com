@@ -1,269 +1,117 @@
-# 随机跳转网站
+# 随机跳转网站 · Rust / WebAssembly
 
-纯静态网站，部署目录为 `pages`：
+纯静态网站，抽卡、保底、调试参数及视频状态逻辑在 Rust 中执行。
+普通结果在 WASM 初始化并完成抽卡后立即跳转；仅 UR 配有启动视频时显示点击播放引导。
+HTML 保持最小入口，黑白引导页面内容嵌入 WASM。
 
-```
+## 文件结构
+
+```text
+wasm/
+  Cargo.toml / Cargo.lock       Rust 项目和依赖锁定
+  config.json                   概率、卡池、链接及视频配置（编译进 WASM）
+  src/engine.rs                 mulberry32、抽卡、保底、存档解析、目标地址
+  src/runtime.rs                调试自检、模拟统计、视频播放状态与跳转流程
+  src/guide.html                UR 黑白引导页样式和内容（编译进 WASM）
+  src/lib.rs                    WASM 内存及 JSON 调用接口
+  build.rs / src/data.rs        构建时随机分块编码、运行时解码与缓存
+scripts/
+  build.js                      编译 Rust、生成 WASM 和混淆加载器
+  cloudflare-build.sh            Cloudflare 安装固定 Rust 工具链并构建
+  load.js                       浏览器适配层：DOM、媒体、存储和加载
+  jump.js                       迁移前 JS，仅用于等价对照测试，不再部署
+  convert.js                    旧 Cloudflare 构建命令的兼容入口
+  test-wasm.js                  固定种子 JS / WASM 等价测试
+  test-wasm-host.js             实际 WASM 与浏览器适配层的联动测试
 pages/
-  index.html            入口：立即抽卡；仅 UR 视频出货时显示点击播放引导
-  search.html           站内搜索页（3★ 空池时的兜底去向）
-  aha.js                由 scripts/jump.js 生成的混淆脚本（构建产物，已 gitignore）
-  video/
-    startup-01.mp4      限定 5★ 的启动动画素材
+  index.html / search.html      静态页面
+  aha.js / aha.wasm            混淆加载器 / WASM 发布产物（gitignore，构建时生成）
+  video/startup-01.mp4          已裁剪的启动视频
 ```
 
-打开网站 = **抽一发**，抽到哪张卡就跳到哪张卡指向的网页。卡池、保底、UP、启动动画等规则
-见下方 [跳转即抽卡](#跳转即抽卡)。修改链接和卡池分组时编辑 `scripts/jump.js`。
+## 修改与本地构建
+
+需要 Node.js、Rust（支持 edition 2024 的版本）和 WASM 编译目标。
+
+```sh
+rustup target add wasm32-unknown-unknown
+node scripts/build.js
+```
+
+修改链接 / 概率时编辑 `wasm/config.json`；修改引导页编辑 `wasm/src/guide.html`。
+只需提交源文件和 Cargo.lock；WASM 与混淆后的 JS 均在构建时生成，无需提交二进制。
+不要再通过修改 `scripts/jump.js` 调整线上行为。
+
+浏览器仍需要少量 JS 来加载 WASM、调用媒体和 DOM 接口，适配层不负责抽卡规则。
+配置和引导页不再通过 include_str 以明文嵌入发布模块。
+构建脚本每次生成随机参数；Rust build.rs 对数据分块、倒序、打乱块顺序，
+使用各块独立的伪随机字节流和前一密文字节混合编码，并分拆存储种子。
+运行时解码通过 black_box 防止 LTO 折叠回明文，配置首次使用时解码并缓存，引导页仅在需要时解码。
+构建会扫描发布 WASM，若发现完整目标 URL 或完整原始配置 / HTML，则中止发布。
+这是增加静态分析成本的混淆方案，不是保密加密：运行时内存、调用结果和实际跳转仍可观察。
+公开仓库中的 config.json 和旧 jump.js 仍可直接读取原始链接。
 
 ## Cloudflare Workers 自动部署
 
-在 Cloudflare Workers & Pages 创建 Worker 并连接 GitHub 仓库
-`kaitoulapin/xn--qvrw50dh7j.com`，使用以下配置：
+连接 GitHub 仓库 `kaitoulapin/xn--qvrw50dh7j.com`：
 
 | 设置 | 值 |
 | --- | --- |
 | Worker 名称 | `mihoyo` |
 | 生产分支 | `main` |
-| 根目录 | 仓库根目录（留空或 `/`） |
-| 构建命令 | `node scripts/convert.js scripts/jump.js pages/aha.js` |
+| 根目录 | 仓库根目录（留空或 /） |
+| 构建命令 | 留空（由 Wrangler 的 build.command 执行编译） |
 | 部署命令 | `npx wrangler deploy` |
 
-Worker 名称必须与 `wrangler.jsonc` 中的 `name` 一致。
-仅发布 `pages` 目录；不需要 Worker 入口脚本，也不需要 GitHub Actions。
-每次推送到 `main` 后，Cloudflare 自动生成混淆脚本 `pages/aha.js` 并部署。
+Worker 名称与 `wrangler.jsonc` 保持一致，只发布 `pages`。
+Wrangler 部署前执行 `node scripts/build.js --cloudflare`。
+Linux 构建环境会运行 `scripts/cloudflare-build.sh`，通过官方 rustup 安装 Rust 1.98.1
+及 `wasm32-unknown-unknown`，随后编译 Rust，并通过 convert.js 混淆 load.js。
+构建失败会阻止部署。Cloudflare 构建环境需要能访问 Rust 下载服务及 crates.io。
 
-## 本地生成混淆脚本
+如果控制台仍配置了旧构建命令，请改为留空，避免部署前重复编译。
+旧命令 `node scripts/convert.js scripts/jump.js pages/aha.js` 保留入口兼容，但现在会编译 Rust。
+推送后的流程：拉取源码 → 安装 Rust → 编译 aha.wasm → 混淆 aha.js → 发布 pages。
+浏览器通过 HTTPS 加载 aha.wasm，抽卡逻辑仍在客户端执行。
+
+## 卡池与存档兼容
+
+`config.json` 中 `config` 保留原来的概率配置：基础五星 4%、四星 30%、
+第 12 抽起软保底、第 20 抽五星硬保底、四星 10 抽保底、50% UP、大保底、捕获明光、
+常驻重复权重减半以及单次最多 10 抽。`WEIGHT_CURVE` 默认为 0（池内等概率）。
+
+| 卡池 | 字段 | 稀有度 |
+| --- | --- | --- |
+| 限定 | `limited.cards` | UR |
+| 常驻 | `standard.cards` | SSR |
+| 投稿 / 四星 | `preferred.cards`，可选 `preferred.up` | SR |
+| 狗粮 | `filler.cards`，可选 `filler.up` | R |
+
+卡片使用 `url`、`group`、`rarity`，限定卡可带 `video`；可用 `weight` 指定池内权重。
+四星 / 三星有 UP 子池时按 `config.UP_SHARE` 分配，其余卡按池内权重抽取。
+视频配置位于 `startup`，加载进度配置位于 `progress`。
+更换视频后更新 `progress.BYTES`，构建时会核对素材存在且大小一致。
+
+继续使用 `buwanyuanshen.gacha.v2` 存档和 version 2 结构，已有保底记录无需清空。
+抽卡后先存档再显示 UR 引导；开启视频不会重新抽卡。
+引导按钮支持点击及键盘激活。视频支持有声播放、静音降级、点击开声、跳过、播完跳转和超时兜底。
+
+## 调试与验证
+
+| 参数 | 用途 |
+| --- | --- |
+| `?seed=123` | 固定 mulberry32 种子，可复现 |
+| `?reset=1` | 重置保底 |
+| `?pull=10` | 多抽，最高稀有度卡决定跳转，同级取第一张 |
+| `?force=ur` | 与旧版相同：强制进入五星分支，仍按大小保底决定限定或常驻 |
+| `?seed=42&force=ur` | 固定种子的限定视频引导测试 |
+| `?probe=1` | 仅控制台自检，不跳转、不写入本次抽卡 |
+| `?probe=1&sim=20000` | 模拟分布，恢复原存档，不跳转 |
 
 ```sh
-node scripts/convert.js scripts/jump.js pages/aha.js
+cargo test --manifest-path wasm/Cargo.toml --locked
+node scripts/test-wasm.js
+node scripts/test-wasm-host.js
 ```
 
-混淆可增加分析成本，但无法保密。若不希望他人从 GitHub 读取原始链接配置，
-请将仓库设为私有，并授权 Cloudflare 访问该仓库。
-
----
-
-## 跳转即抽卡
-
-`pages/index.html` 打开后立即抽卡并存档。普通结果立即使用 `location.replace()` 跳转。
-仅抽中 UR 且配置了启动视频时，由 `jump.js` 动态生成黑白引导页（HTML 不包含引导模板或样式），点击屏幕或通过 Enter / 空格激活按钮后播放，
-播完跳转。点击仅开始播放，不再抽卡，重复点击也不会重复启动。
-
-抽卡进度存在浏览器 `localStorage`（key `buwanyuanshen.gacha.v2`），所以保底能跨访问累积。
-
-### 卡池分层
-
-| 卡池 | 配置项 | 内容 | 说明 |
-| --- | --- | --- | --- |
-| 5★ 限定 UP | `LIMITED_CARDS` | `原神官网` | 唯一限定 5★，出货会先播启动动画 |
-| 5★ 常驻（歪） | `STANDARD_KEYS` | `FGO国服官网` + `站内搜索页`（`./search.html`） | UP 没中时从这里随机；池内自带小保底，抽到过的那条下次概率减半 |
-| 4★ | `PREFERRED_KEYS` + `PREFERRED_UP_KEYS` | `网友投稿` 6 条（含《明日方舟》EP - 铁花飞）（UP 子池目前为空） | 有 UP 子池时 UP 占 `UP_SHARE` |
-| 3★ 狗粮 | `FILLER_GROUPS` + `FILLER_UP_KEYS` | UP：`瓶子君152`、`Rick Astley`；其余 13 条 | UP 占 3★ 的 50% |
-
-未启用的分组：`B站主页 个人UP主（备选）` —— 里面的链接全在注释里，想启用就把分组名加进
-`PREFERRED_KEYS` 并取消对应注释。
-
-> 常驻 5★ 池目前两条（`FGO国服官网`、`./search.html`），歪的时候各占一半、各约 1.4%。
-> 想调整就往 `STANDARD_KEYS` 里加分组。
-
-### UP 子池（3★ / 4★ 也有当期 UP）
-
-每个稀有度池都可以拆成「UP 子池 + 其余卡」：
-
-| 配置 | 作用 |
-| --- | --- |
-| `LIMITED_CARDS` | 5★ 的 UP 子池，带 `video` / `share` 字段 |
-| `PREFERRED_KEYS` / `PREFERRED_UP_KEYS` | 4★ 的其余卡 / UP 子池（引用 `GROUPS` 里的分组名） |
-| `FILLER_GROUPS` / `FILLER_UP_KEYS` | 3★ 的所有分组 / 其中哪些分组算 UP（引用分组名） |
-| `CONFIG.UP_SHARE` | UP 占该稀有度的比例（`0.5` = 一半），**UP 内部等分**；UP 子池为空时该项自动失效 |
-
-注意 `CONFIG.UP_RATE` 是 5★ 专属的「大小保底」概率，和 `UP_SHARE` 不是一回事：
-
-- `UP_RATE`（5★）：出货时判定给不给限定，歪了就进常驻池。
-- `UP_SHARE`（3★/4★）：只做**概率提升**，没有大小保底 —— 抽不到 UP 就是池里其他卡。
-
-3★ 当前的实测分布：
-
-| | 占 3★ | 占总访问 |
-| --- | --- | --- |
-| UP：`瓶子君152` | 25.0% | 15.33% |
-| UP：`Rick Astley` | 25.0% | 15.35% |
-| 其余 13 条（每条） | 3.85% | 约 2.35% |
-
-> ⚠️ 实际效果和直觉相反：进 UP 池是**提升**出现率（瓶子君152 从 14.6% 升到 15.3%，
-> Rick Astley 从 8.4% 升到 15.4%），不是变稀有。想让它们更少见就别放进 UP 子池。
-
-`LIMITED_CARDS` 每条可选字段：
-
-```js
-const LIMITED_CARDS = [
-  { group: '原神官网', video: 'video/startup-01.mp4' },              // 有启动动画
-  { group: '某个组' },                                               // 不写 video → 直接跳转
-  { group: '某个组', video: 'video/startup-02.mp4', share: 3 },      // 换素材 + 提高权重
-]
-```
-
-- `group`：`GROUPS` 里的分组名。
-- `video`：该链接专属的启动动画（相对 `pages/` 的路径）。不写就用 `STARTUP.DEFAULT_VIDEO`；
-  两者都没有 → 秒跳，行为和以前完全一样。
-- `share`：池内出货权重，默认 1。限定池放两条且 `share` 相等 → 各占一半 UP 概率。
-
-池内权重按「顺序平滑衰减」分配（`WEIGHT_CURVE`，默认 0.8）：排在前面的链接略常出，
-但不会有某个链接长期霸屏。想让某条链接更常出，也可以给 `GROUPS` 里的链接加 `weight` 字段，
-例如 `{ url: '...', weight: 3 }`。
-
-### 启动动画
-
-限定 5★ 出货后，先全屏播一段视频，播完再跳转。配置在 `scripts/jump.js` 的 `STARTUP`：
-
-| 配置 | 默认值 | 说明 |
-| --- | --- | --- |
-| `DEFAULT_VIDEO` | `null` | 全局默认素材，`null` = 所有限定 5★ 都秒跳 |
-| `TIMEOUT` | `25` | 从**真正开始播放**起算，最长播多少秒就强制跳转 |
-| `MUTED` | `false` | **默认带声音**。设 `true` 则永久静音（也不会请求声音、不会挂开声音逻辑） |
-| `SKIP_HINT` | `'点击此处跳过'` | 跳过提示条的文案。设成 `''` 则页面上没有提示条 |
-
-交互：
-
-| 操作 | 行为 |
-| --- | --- |
-| 什么都不做 | 正常播放，播完自动跳转 |
-| **点击画面任意位置** | 若声音被拦下 → **立刻出声并从头重播**；若已出声 → 无动作 |
-| **点右上角提示条** | 立即跳过并跳转 |
-| 按任意键 | 同「点击画面」 |
-| `TIMEOUT` 秒 / 播放结束 | 自动跳转 |
-
-行为细节：
-
-- 素材加载失败 / 解码失败 / 自动播放被拒 / 网络挂起 —— 全部走兜底计时，**不会卡住**。
-  兜底时长是 `TIMEOUT + 5` 秒（`TIMEOUT: 0` 时为 30 秒）。
-- **先存档再播动画**：否则看动画时一刷新就能重新抽，保底会失效。
-- 素材放 `pages/video/`。构建期会校验 `jump.js` 里引用的每个 `video` 路径都存在，
-  **缺文件就直接构建失败**（宁可构建红掉，也不要在线上被抽中时才发现动画放不出来）。
-- mp4 是明文进仓库的，`convert.js` 的混淆只作用于 `jump.js`，素材本身藏不住。
-- 体积建议控制在几 MB 以内。当前 `startup-01.mp4` 使用用户提供的已裁剪素材，
-  文件大小为 607,977 字节；从文件开头播放，不再按时间索引跳播。
-
-#### 声音：默认开启，但浏览器可能拦
-
-用户点击引导页后，按 `MUTED: false` 请求带声音播放。调用直接发生在用户点击事件中，
-不经过延时或异步等待，以保留用户激活状态。浏览器策略或用户设置仍可能限制播放，
-因此继续保留静音重试、开启声音提示和跳过入口。
-
-被拦下时的处理，**绝不会静默变哑巴**：
-
-1. 立刻静音把**画面**放出来（不白屏、不卡住）；
-2. 提示条变成「🔇 点击任意处开声音　·　点击此处跳过」；
-3. 用户第一次点击/按键 → **解除静音 + `currentTime = 0` 从头重播**，
-   所以不会因为开头几秒是静音而错过开场；这次点击**不会**触发跳过。
-
-排查用：`?force=ur` 直接触发启动动画，然后看控制台 `[启动动画]` 开头的日志：
-
-- 「带声音自动播放被拦下」→ 就是上面的策略问题。
-- 「当前页面不是 HTTPS」→ 换成 https 域名即可出声。
-- 「静音重试仍然失败」→ 素材本身有问题（编码/音轨）。
-- 什么都没打印 → 这次抽的不是限定 5★，压根没播动画。
-
-
-
-### 抽卡机制与当前数值
-
-全部数值集中在 `scripts/jump.js` 顶部的 `CONFIG` 里。
-
-| 机制 | 实现 | 当前数值 |
-| --- | --- | --- |
-| 基础 5★ 概率 | `BASE_RATE_5` | 4% |
-| 软保底 | 第 `SOFT_PITY_5` 抽起每抽递增 `SOFT_PITY_STEP_5` | 第 12 抽起，每抽 +8% |
-| 硬保底 | 第 `HARD_PITY_5` 抽必定出货 | 第 20 抽 |
-| 小保底 | 5★ 首次有 `UP_RATE` 的概率是限定 UP | 50% |
-| 大保底 | 歪过一次后，下个 5★ 必定是限定 UP（跨访问继承） | — |
-| 捕获明光 | 连续歪 `RADIANCE_LOSSES` 次后，本期 5★ 的 UP 占比升到 `RADIANCE_UP_RATE` | 连歪 3 次 → 80% |
-| 4★ 保底 | `HARD_PITY_4` 抽内必出 4★ 及以上 | 10 抽 |
-| 伪随机 | mulberry32 自播种 PRNG（默认 `Date.now()` 播种） | 可用 `?seed=` 复现 |
-
-**长跑实测分布**（40 万次访问的模拟结果）：
-
-| 结果 | 占比 |
-| --- | --- |
-| 5★ 合计 | 8.35%（其中限定 UP 5.56% / 常驻歪 2.79%） |
-| 4★ | 30.28% |
-| 3★ | 61.36% |
-| 平均几抽一个 5★ | 约 12 次访问 |
-| 最长连续未出 5★ | 20 次（硬保底正好兜住） |
-
-限定 5★ 约 **18 次访问出现一次**，也就是启动动画的触发频率（含大保底与捕获明光）。
-3★ UP 那两条各约 15.3%，3★ 其余 13 条各约 2.35%，4★ 六条各约 5.0%，
-两个常驻 5★ 各约 1.4%。
-
-### 抽到多张时跳哪里
-
-`?pull=N` 可以一次抽 N 张（上限 `MAX_PULLS`），此时取**最高稀有度**那张决定跳转，
-同稀有度取最早抽到的。稀有度相同时 5★ 内部不再区分限定/常驻。
-
-### 3★ 狗粮池
-
-`FILLER_GROUPS` 里有两个分组：`3星狗粮UP`（2 条，算 UP）和 `3星狗粮`（13 条）。
-哪个分组算 UP 由 `FILLER_UP_KEYS` 决定：
-
-```js
-const FILLER_UP_KEYS = ['3星狗粮UP']
-const FILLER_GROUPS = [
-  { name: '3星狗粮UP', urls: ['https://…', 'https://…'] },   // 吃 UP_SHARE，内部等分
-  { name: '3星狗粮',   urls: ['https://…', /* 其余 */] },      // 等概率
-]
-```
-
-加链接直接往对应分组的 `urls` 里写；想把某条提到 UP，把它挪进 UP 分组即可。
-`FILLER_UP_KEYS` 写了 `FILLER_GROUPS` 里不存在的名字会直接报错（不会静默失效）。
-
-代码里保留了「3★ 池为空时降级」的分支（`FILLER_FALLBACK_UPGRADE` + `FALLBACK_URL`），
-只有把 `urls` 清空才会生效，正常情况下不会触发。
-
-### 池内概率是等概率的
-
-`CONFIG.WEIGHT_CURVE` 默认为 **0**，即**同一子池内每条链接等概率** —— 和原版
-`urls[Math.floor(Math.random() * urls.length)]` 的行为一致。
-
-> 早期版本用过 `WEIGHT_CURVE: 0.8`（按列表顺序衰减，头尾差 8.7 倍），已改回等概率。
-> 那个做法的问题是：**列表顺序就等于概率**，而顺序是维护者随手排的，概率差异变成了隐含的。
-> 现在想让某条更常出，用 UP 子池显式表达。
-> 只有 5★ 常驻池的「小保底」还会对单条加权（上次抽到的那条减半），这是刻意的。
-
-### 目标地址上的抽卡标记
-
-跳转时会在地址末尾带一个不影响页面的标记（`PULL_MARK`，默认开启）：
-
-- 站外链接用 hash：`https://ys.mihoyo.com/#gacha-ur-13`
-- 站内链接用 query：`./search.html?gacha=ssr-8`（这样不会顶掉页面自己的 hash）
-
-`gacha-<稀有度>-<距上次5★的抽数>`，`ur` = 限定 UP，`ssr` = 常驻歪，`sr` = 4★，`r` = 3★。
-看到地址栏是 `#gacha-ur-0` 就知道这次出货了。不想要就设 `PULL_MARK: false`。
-
-### 调试参数（URL）
-
-调试参数不写进 HTML，正常访客不会触发。
-
-| 参数 | 作用 |
-| --- | --- |
-| `?probe=1` | 只抽一次并在控制台打印明细，**不跳转** |
-| `?probe=1&sim=20000` | 连抽 2 万次并打印分布表，用来验证概率，不跳转、不写入真实进度 |
-| `?force=ur` | **强制本次抽中限定 5★**，用来直接看启动动画（约 18 次访问才自然触发一次） |
-| `?seed=123` | 固定伪随机种子，结果可复现 |
-| `?pull=10` | 强制抽 10 张 |
-| `?reset=1` | 清空保底进度 |
-
-自检示例：
-
-```
-https://你的域名/?probe=1&sim=20000      # 验证概率
-https://你的域名/?force=ur               # 直接看启动动画
-```
-
-### 改配置注意事项
-
-- 分组名写在 `LIMITED_CARDS[].group` / `STANDARD_KEYS` / `PREFERRED_KEYS` / `FILLER_GROUPS` 里，
-  必须存在于 `GROUPS`；名字对不上会直接抛错（宁可报错也不静默跳到别处）。
-- `LIMITED_CARDS[].video` 指向的素材必须真实存在于 `pages/` 下，否则构建失败。
-- 旧版的 `probability` 字段**已废弃**：抽卡结果由稀有度和保底决定去向，不再看百分比。
-  字段保留是为了不破坏老配置，写了也不会报错。
-- 保底参数需满足 `1 <= SOFT_PITY_5 <= HARD_PITY_5`，否则抛错。
-- 改完 `scripts/jump.js` 记得重新生成 `pages/aha.js`。
+使用 HTTP 静态服务器预览 `pages`；浏览器通过 fetch 加载模块，不能直接用 file:// 打开。

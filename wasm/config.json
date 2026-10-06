@@ -1,0 +1,176 @@
+{
+  "config": {
+    "BASE_RATE_5": 0.04,
+    "SOFT_PITY_5": 12,
+    "SOFT_PITY_STEP_5": 0.08,
+    "HARD_PITY_5": 20,
+    "BASE_RATE_4": 0.3,
+    "HARD_PITY_4": 10,
+    "UP_RATE": 0.5,
+    "RADIANCE_LOSSES": 3,
+    "RADIANCE_UP_RATE": 0.8,
+    "MAX_PULLS": 10,
+    "WEIGHT_CURVE": 0,
+    "UP_SHARE": 0.5,
+    "STANDARD_REPEAT_DAMPING": 0.5,
+    "FILLER_FALLBACK_UPGRADE": 0.6,
+    "PULL_MARK": true,
+    "STORAGE_KEY": "buwanyuanshen.gacha.v2"
+  },
+  "startup": {
+    "DEFAULT_VIDEO": null,
+    "TIMEOUT": 25,
+    "MUTED": false,
+    "SKIP_HINT": "点击此处跳过"
+  },
+  "progress": {
+    "BYTES": 607977,
+    "SHOW": true
+  },
+  "limited": {
+    "cards": [
+      {
+        "url": "https://ys.mihoyo.com/",
+        "group": "原神官网",
+        "video": "video/startup-01.mp4",
+        "share": 1,
+        "rarity": "UR"
+      }
+    ],
+    "up": []
+  },
+  "standard": {
+    "cards": [
+      {
+        "url": "https://game.bilibili.com/fgo/",
+        "group": "FGO国服官网",
+        "rarity": "SSR"
+      },
+      {
+        "url": "./search.html",
+        "group": "站内搜索页",
+        "rarity": "SSR"
+      }
+    ],
+    "up": []
+  },
+  "preferred": {
+    "cards": [
+      {
+        "url": "https://www.bilibili.com/video/BV1fy4y1L7Rq/",
+        "group": "网友投稿",
+        "rarity": "SR"
+      },
+      {
+        "url": "https://www.bilibili.com/video/BV18E4m1d7b7/",
+        "group": "网友投稿",
+        "rarity": "SR"
+      },
+      {
+        "url": "https://www.bilibili.com/video/BV1HfKiz3Ezf/",
+        "group": "网友投稿",
+        "rarity": "SR"
+      },
+      {
+        "url": "https://www.bilibili.com/video/BV1EBcFznE2H/",
+        "group": "网友投稿",
+        "rarity": "SR"
+      },
+      {
+        "url": "https://www.bilibili.com/video/BV1L4421S7Kr/",
+        "group": "网友投稿",
+        "rarity": "SR"
+      },
+      {
+        "url": "https://www.bilibili.com/video/BV1x5411o7Kn/",
+        "group": "网友投稿",
+        "rarity": "SR"
+      }
+    ],
+    "up": []
+  },
+  "filler": {
+    "cards": [
+      {
+        "url": "https://www.qq.com/",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://mc.kurogames.com/download/",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://endfield.hypergryph.com/",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://career.hypergryph.com/",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://yh.wanmei.com/index.html",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://gf2.sunborngame.com/",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://klbq.idreamsky.com/",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://bdon.biligames.com/",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://se.feimogames.com/home",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://space.bilibili.com/75806856/",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://space.bilibili.com/3546861952567358/",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://space.bilibili.com/3546379781671377/",
+        "group": "3星狗粮",
+        "rarity": "R"
+      },
+      {
+        "url": "https://space.bilibili.com/3546893747489397/",
+        "group": "3星狗粮",
+        "rarity": "R"
+      }
+    ],
+    "up": [
+      {
+        "url": "https://space.bilibili.com/730732",
+        "group": "3星狗粮UP",
+        "rarity": "R",
+        "up": true
+      },
+      {
+        "url": "https://www.bilibili.com/video/BV1GJ411x7h7/",
+        "group": "3星狗粮UP",
+        "rarity": "R",
+        "up": true
+      }
+    ]
+  },
+  "fallback": "./search.html"
+}

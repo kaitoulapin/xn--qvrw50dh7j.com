@@ -1,6 +1,9 @@
 {
   "name": "mihoyo",
   "compatibility_date": "2026-10-06",
+  "build": {
+    "command": "node scripts/build.js --cloudflare"
+  },
   "assets": {
     "directory": "./pages"
   }
