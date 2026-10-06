@@ -2,11 +2,13 @@
 //
 // 跳转逻辑 = 二游抽卡。每次打开网站就是「抽一发」，抽到哪张卡就跳到哪张卡指向的网页。
 //
-// 卡池分层（改链接只需要动 GROUPS，其它数值都在 CONFIG 里）：
-//   LIMITED_KEYS   5★ 限定 UP 池 —— 抽中 5★ 时，按 UP_RATE 直接出货；歪了才进常驻池
-//   STANDARD_KEYS  5★ 常驻池     —— 池内自带小保底：上次抽到的那条本轮概率减半
-//   PREFERRED_KEYS 4★ 池
-//   FILLER_GROUPS  3★ 狗粮池（待补充，见下方注释）
+// 卡池分层（改链接只需要动 GROUPS / FILLER_GROUPS，其它数值都在 CONFIG 里）：
+//   LIMITED_CARDS    5★ 限定 UP 池 —— 抽中 5★ 时按 UP_RATE 直接出货；歪了才进常驻池
+//   STANDARD_KEYS    5★ 常驻池     —— 池内自带小保底：上次抽到的那条本轮概率减半
+//   PREFERRED_KEYS   4★ 池
+//   PREFERRED_UP_KEYS 4★ 的 UP 子池（留空 = 本池没有当期 UP）
+//   FILLER_GROUPS    3★ 狗粮池（分组写在下方，不引用 GROUPS）
+//   FILLER_UP_KEYS   3★ 的 UP 子池（按分组名挑）
 //
 // 抽卡机制：
 //   软保底    第 SOFT_PITY_5 抽起，每抽概率 +SOFT_PITY_STEP_5
@@ -15,12 +17,16 @@
 //   大保底    歪过一次之后，下一个 5★ 必定是限定 UP（跨访问继承）
 //   捕获明光  连续歪 RADIANCE_LOSSES 次后，本期 5★ 的 UP 占比提升到 RADIANCE_UP_RATE
 //   4★ 保底   10 抽内必出 4★ 及以上（兜底，防止连续多次都是 3★）
+//   3★/4★ UP 有 UP 子池时，UP 占该稀有度的 UP_SHARE（只提概率，没有大小保底）
 //   伪随机    mulberry32 自播种 PRNG，比 Math.random 手感更稳，?seed= 可复现
+//
+// 池内概率默认等概率（WEIGHT_CURVE: 0），与原版随机行为一致。
 //
 // 调试参数（URL）：
 //   ?seed=123          固定种子，结果可复现
 //   ?reset=1           清空保底进度
 //   ?pull=N            强制抽 N 张（上限 10）
+//   ?force=ur          强制本次抽中限定 5★，用来直接看启动动画
 //   ?probe=1           只打印本次抽卡明细到控制台，不跳转
 //   ?probe=1&sim=20000 连抽 N 次并打印分布表，用来验证概率，不跳转
 
@@ -102,7 +108,7 @@ const LIMITED_CARDS = [
 ]
 
 // 常驻池（非 UP 五星）：UP 没中的时候从这里随机
-const STANDARD_KEYS = ['站内搜索页']
+const STANDARD_KEYS = ['FGO国服官网', '站内搜索页']
 
 // 4★ 池：UP 子池（PREFERRED_UP_KEYS）留空 = 本池没有当期 UP，池内等概率
 const PREFERRED_KEYS = ['网友投稿']
@@ -149,6 +155,12 @@ const GROUPS = [
   },
   // 原「二游官网」与「B站主页 各大官方」两组已挪进 3★ 狗粮池，见上方 FILLER_GROUPS
   {
+    name: 'FGO国服官网',
+    urls: [
+      'https://game.bilibili.com/fgo/', // FGO 国服官网（常驻5★）
+    ],
+  },
+  {
     // 备选 UP 主池：当前没有任何池子引用它，链接留在注释里备查。
     // 想启用就把名字加进 PREFERRED_KEYS，再取消下面某几行的注释。
     name: 'B站主页 个人UP主（备选）',
@@ -173,6 +185,7 @@ const GROUPS = [
       'https://www.bilibili.com/video/BV1fy4y1L7Rq/', // 《明日方舟》夏日嘉年华限时活动宣传PV
       'https://www.bilibili.com/video/BV18E4m1d7b7/', // 《原神》纳塔交响音乐现场
       'https://www.bilibili.com/video/BV1HfKiz3Ezf/', // 《崩坏：星穹铁道》白厄角色PV——「日冕」
+      'https://www.bilibili.com/video/BV1EBcFznE2H/', // 《明日方舟》EP - 铁花飞
       'https://www.bilibili.com/video/BV1L4421S7Kr/', // 千恋＊万花OP动画
       'https://www.bilibili.com/video/BV1x5411o7Kn/', // 烂苹果
     ],
