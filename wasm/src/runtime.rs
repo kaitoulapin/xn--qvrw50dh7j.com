@@ -123,6 +123,8 @@ pub fn execute(request: &Value) -> Value {
     if event != "init" && event != "compare" {
         return SESSION.with(|s|json!({"commands":s.borrow_mut().as_mut().map(|s|s.event(event,request)).unwrap_or_default()}));
     }
+    // 暂停直播优先跳转；恢复时取消此段注释，并恢复 load.js 的状态请求。
+    /*
     if event == "init" {
         let search = txt(&request["search"]);
         let diagnostic = param(search, "probe").is_some_and(|v| v != "0" && v != "false");
@@ -139,6 +141,7 @@ pub fn execute(request: &Value) -> Value {
             return json!({"commands":[{"op":"redirect","url":"https://live.bilibili.com/42062"}]});
         }
     }
+    */
     let mut engine = Engine::new(request);
     if event == "compare" {
         let count = num(&request["count"]).clamp(1.0, 200000.0) as usize;

@@ -136,7 +136,7 @@
     if (document.prerendering) {
       await new Promise(resolve => document.addEventListener('prerenderingchange', resolve, { once: true }))
     }
-    const statusPromise = readLiveStatus()
+    const statusPromise = Promise.resolve(null)
     const response = await fetch(new URL('aha.wasm', base))
     if (!response.ok) throw new Error('WASM download failed: ' + response.status)
     const backup = response.clone()

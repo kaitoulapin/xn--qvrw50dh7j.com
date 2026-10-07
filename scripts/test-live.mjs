@@ -9,7 +9,7 @@ const live = { schemaVersion: 1, roomId: 42062, liveStatus: 1, checkedAt: now, e
 const state = JSON.stringify({ version: 2, totalPulls: 3, pity5: 3, pity4: 3 })
 const call = request => createAdapter(instance.exports).call({ event: 'init', search: '?seed=42', state, now, ...request })
 for (const search of ['', '?force=ur', '?reset=1', '?pull=10']) {
-  assert.deepEqual(call({ search, liveStatus: live }).commands, [{ op: 'redirect', url: 'https://live.bilibili.com/42062' }])
+  assert.deepEqual(call({ search, liveStatus: live }), call({ search, liveStatus: null }))
 }
 for (const status of [null, {}, ...[0, 2, null, '1'].map(liveStatus => ({ ...live, liveStatus })),
   { ...live, roomId: 1 }, { ...live, schemaVersion: 2 }, { ...live, checkedAt: now + 1 },
@@ -70,4 +70,4 @@ for (const failAt of [0, 1, 2, -1]) {
   if (failAt < 0) await publishStatus(env, live, fetcher)
   else { await assert.rejects(publishStatus(env, live, fetcher), /publish step failed/); assert.equal(step, failAt + 1) }
 }
-console.log('Passed: live priority, untouched pity/reset, stale/invalid fallback, diagnostics, Danmakus parsing, isolated atomic uploads and failure handling.')
+console.log('Passed: live priority disabled, normal draws/reset/forced UR, stale/invalid fallback, diagnostics, Danmakus parsing, isolated atomic uploads and failure handling.')

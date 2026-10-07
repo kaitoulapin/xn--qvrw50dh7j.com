@@ -64,7 +64,7 @@ async function main() {
 
   // Exercise published code with both normal navigation and Chrome prerender.
   for (const [prerendering, mode] of [[false, 'offline'], [true, 'offline'], [false, 'live'], [false, 'timeout'], [false, 'invalid']]) {
-    let saved, downloads = 0, replacements = 0, writes = 0, activate
+    let saved, downloads = 0, replacements = 0, writes = 0, statusRequests = 0, activate
     let resolveRedirect
     const redirected = new Promise(resolve => { resolveRedirect = resolve })
     const document = {
@@ -80,6 +80,7 @@ async function main() {
       localStorage: { getItem: () => JSON.stringify(state), setItem: (key, value) => { writes++; saved = JSON.parse(value) } },
       fetch: async url => {
         if (url.pathname === '/live-status.json') {
+          statusRequests++
           if (mode === 'timeout') return new Promise(() => {})
           return { ok: true, json: async () => {
             if (mode === 'invalid') throw new SyntaxError('JSON')
@@ -103,8 +104,8 @@ async function main() {
     }
     const target = await redirected
     assert.equal(downloads, 1); assert.equal(replacements, 1)
-    if (mode === 'live') { assert.equal(target, 'https://live.bilibili.com/42062'); assert.equal(writes, 0) }
-    else { assert.match(target, /#gacha-r-3$/); assert.equal(writes, 1); assert.equal(saved.totalPulls, 4); assert.equal(saved.pity5, 4) }
+    assert.equal(statusRequests, 0)
+    assert.match(target, /#gacha-r-3$/); assert.equal(writes, 1); assert.equal(saved.totalPulls, 4); assert.equal(saved.pity5, 4)
   }
   console.log('Passed: actual WASM + browser adapter; ordinary redirect, UR click-to-play without entry-note, storage, timers, completion, prerender activation and duplicate-loader protection.')
 }
