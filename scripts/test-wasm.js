@@ -1,6 +1,7 @@
 const fs = require('node:fs')
 const vm = require('node:vm')
 const assert = require('node:assert/strict')
+const titles = new Map(Object.values(require('../wasm/config.json').pools).flatMap(p => [...p.cards, ...(p.featuredCards || [])]).map(c => [c.url, c.title]))
 const { createAdapter } = require('./load.js')
 
 async function main() {
@@ -16,7 +17,12 @@ async function main() {
       console: { log() {}, debug() {} },
       window: { location: { search }, localStorage: { getItem: () => state } },
     })
-    return JSON.parse(JSON.stringify(result))
+    const value = JSON.parse(JSON.stringify(result))
+    for (const card of [...value.cards, value.best]) {
+      card.title = titles.get(card.url); delete card.group
+      if (card.share !== undefined) { card.weight = card.share; delete card.share }
+    }
+    return value
   }
   const states = [null, 'broken JSON', JSON.stringify({ version: 1 }), JSON.stringify({ version: 2, totalPulls: 300, pity5: 19, pity4: 9, guaranteeUp: true, lossStreak: 3, lastStandardUrl: './search.html', limitedHits: { 'https://ys.mihoyo.com/': 7 } }), JSON.stringify({ version: 2, totalPulls: 2.9, pity5: -1, pity4: '3', guaranteeUp: 1, lossStreak: 2.8, lastStandardUrl: 7, limitedHits: { bad: -1, ok: 1.9 } })]
   let comparisons = 0, draws = 0

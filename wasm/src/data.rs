@@ -52,7 +52,10 @@ pub fn text(id: usize) -> &'static str {
 mod tests {
     #[test]
     fn packed_data_round_trips() {
-        assert_eq!(super::config(), include_str!("../config.json"));
+        let mut packed: serde_json::Value = serde_json::from_str(super::config()).unwrap();
+        let video_bytes = packed["media"].as_object_mut().unwrap().remove("videoBytes").unwrap();
+        assert_eq!(video_bytes["video/startup-01.mp4"], std::fs::metadata(concat!(env!("CARGO_MANIFEST_DIR"), "/../pages/video/startup-01.mp4")).unwrap().len());
+        assert_eq!(packed, serde_json::from_str::<serde_json::Value>(include_str!("../config.json")).unwrap());
         assert_eq!(super::guide(), include_str!("guide.html"));
     }
 }

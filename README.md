@@ -96,10 +96,15 @@ Linux 构建环境会运行 `scripts/cloudflare-build.sh`，通过官方 rustup 
 | 投稿 / 四星 | `preferred.cards`，可选 `preferred.up` | SR |
 | 狗粮 | `filler.cards`，可选 `filler.up` | R |
 
-卡片使用 `url`、`group`、`rarity`，限定卡可带 `video`；可用 `weight` 指定池内权重，兼容限定卡的 `share`（同时存在时 weight 优先）。
-四星 / 三星有 UP 子池时按 `config.UP_SHARE` 分配，其余卡按池内权重抽取。
-视频配置位于 `startup`，加载进度配置位于 `progress`。
-更换视频后更新 `progress.BYTES`，构建时会核对素材存在且大小一致。
+配置现在使用 `schemaVersion: 1`，规则、卡池、视频、存储和跳转分别放在 `gacha`、`pools`、`media`、`storage`、`redirect` 中。字段统一 camelCase。
+
+卡片使用 `url`、`title`，可选 `weight`（默认 1）；仅 UR 支持 `video`。`title` 是链接标题／说明，不控制组概率。稀有度由池名继承，精选归属由 `featuredCards` 继承，不再填写 `rarity`、`up` 或 `share`。
+
+UR / SR / R 的 `featuredRate` 分别控制各池精选列表的概率；五星限定概率是 `gacha.fiveStar.limitedRate`，两者独立。SSR 只有普通列表，并保留 `repeatDamping`。`weightCurve` 保留位置偏置能力，当前为 0；顺序和随机数调用保持原行为。
+
+视频配置集中在 `media`；构建自动读取每个视频的大小，更换素材后无需填写 BYTES。路径必须是 pages 内的相对路径（例如 `video/startup-01.mp4`），禁止目录穿越，实际路径及符号链接都必须留在 pages 内。配置校验在 Node 与直接 Cargo 构建中执行，未知字段也会报错。
+
+详细字段映射见 [配置说明](wasm/CONFIG.md)。存储 key 和保底数据格式保持原样。
 
 继续使用 `buwanyuanshen.gacha.v2` 存档和 version 2 结构，已有保底记录无需清空。
 抽卡后先存档再显示 UR 引导；开启视频不会重新抽卡。

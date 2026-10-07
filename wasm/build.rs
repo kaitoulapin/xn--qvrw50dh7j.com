@@ -1,4 +1,5 @@
 mod string_codegen;
+mod build_config;
 use std::{
     env, fs,
     path::PathBuf,
@@ -47,6 +48,7 @@ fn pack(name: &str, bytes: &[u8], state: &mut u32) -> String {
 
 fn main() {
     println!("cargo:rerun-if-changed=config.json");
+    println!("cargo:rerun-if-changed=build_config.rs");
     println!("cargo:rerun-if-changed=string_codegen.rs");
     println!("cargo:rerun-if-changed=src/guide.html");
     println!("cargo:rerun-if-env-changed=AHA_BUILD_NONCE");
@@ -62,7 +64,11 @@ fn main() {
         state = (state ^ byte as u32).wrapping_mul(16777619);
     }
     state |= 1;
-    let config = fs::read("config.json").unwrap();
+    let config = build_config::prepare(
+        serde_json::from_slice(&fs::read("config.json").unwrap()).expect("Invalid config.json"),
+        &PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../pages"),
+    );
+    let config = serde_json::to_vec(&config).unwrap();
     let guide = fs::read("src/guide.html").unwrap();
     let output = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let mut strings = string_codegen::Strings::default();

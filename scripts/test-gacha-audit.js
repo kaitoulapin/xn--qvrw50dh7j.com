@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const { createAdapter } = require('./load.js')
 const { validateConfig } = require('./validate-config.js')
 const config = JSON.parse(fs.readFileSync('wasm/config.json', 'utf8'))
-const settings = config.config
+const settings = config.gacha
 const rank = { R: 1, SR: 2, SSR: 3, UR: 4 }
 
 async function main() {
@@ -15,9 +15,9 @@ async function main() {
     let pity5 = 0, pity4 = 0, losses = 0, guaranteed = false, upHits = 0
     let best = result.cards[0]
     for (const card of result.cards) {
-      const rate = pity5 >= settings.HARD_PITY_5 - 1 ? 1
-        : pity5 < settings.SOFT_PITY_5 - 1 ? settings.BASE_RATE_5
-          : Math.min(1, settings.BASE_RATE_5 + (pity5 - settings.SOFT_PITY_5 + 2) * settings.SOFT_PITY_STEP_5)
+      const rate = pity5 >= config.gacha.fiveStar.hardPity - 1 ? 1
+        : pity5 < config.gacha.fiveStar.softPityStart - 1 ? config.gacha.fiveStar.baseRate
+          : Math.min(1, config.gacha.fiveStar.baseRate + (pity5 - config.gacha.fiveStar.softPityStart + 2) * config.gacha.fiveStar.softPityStep)
       assert.ok(Math.abs(card.rate5 - rate) < 1e-10)
       assert.equal(card.pity, pity5)
       if (rank[card.rarity] >= 3) {
@@ -25,7 +25,7 @@ async function main() {
         assert.equal(card.guaranteed, guaranteed)
         if (card.rarity === 'UR') {
           upHits++
-          const expectedRadiance = !guaranteed && losses >= settings.RADIANCE_LOSSES && settings.RADIANCE_UP_RATE > settings.UP_RATE
+          const expectedRadiance = !guaranteed && losses >= config.gacha.fiveStar.radiance.lossThreshold && config.gacha.fiveStar.radiance.limitedRate > config.gacha.fiveStar.limitedRate
           assert.equal(card.radiance, expectedRadiance)
           if (card.radiance) radiance++
           if (!guaranteed) losses = 0
@@ -35,8 +35,8 @@ async function main() {
         }
         pity5 = 0; pity4 = 0
       } else {
-        assert.ok(pity5 < settings.HARD_PITY_5 - 1)
-        if (card.rarity === 'R') assert.ok(pity4 < settings.HARD_PITY_4 - 1)
+        assert.ok(pity5 < config.gacha.fiveStar.hardPity - 1)
+        if (card.rarity === 'R') assert.ok(pity4 < config.gacha.fourStar.hardPity - 1)
         pity5++; pity4 = card.rarity === 'SR' ? 0 : pity4 + 1
       }
       if (rank[card.rarity] > rank[best.rarity]) best = card
@@ -70,7 +70,7 @@ async function main() {
   }
   for (const pull of ['-1', '0', 'NaN', 'Infinity', '1.9', '2.9', '1000000']) {
     const result = api.call({ event: 'init', search: '?seed=42&pull=' + pull })
-    const n = Number(pull), expected = Number.isFinite(n) && n > 1 ? Math.min(Math.floor(n), settings.MAX_PULLS) : 1
+    const n = Number(pull), expected = Number.isFinite(n) && n > 1 ? Math.min(Math.floor(n), config.gacha.maxPulls) : 1
     assert.equal(result.state.totalPulls, expected)
     assert.equal(result.commands.filter(c => c.op === 'save').length, 1)
     assert.equal(result.commands.filter(c => ['guide', 'redirect'].includes(c.op)).length, 1)
@@ -78,11 +78,20 @@ async function main() {
   const small = api.call({ event: 'init', search: '?seed=42&probe=1&sim=0.5' })
   assert.match(small.commands[0].message, /1 抽/)
   validateConfig(config)
-  for (const [key, value] of [['HARD_PITY_4', 0], ['MAX_PULLS', 0.5], ['UP_RATE', 2], ['WEIGHT_CURVE', -1], ['RADIANCE_LOSSES', 1.2]]) {
-    const invalid = structuredClone(config); invalid.config[key] = value
+  for (const [path, value] of [['gacha.fourStar.hardPity', 0], ['gacha.maxPulls', 0.5], ['gacha.fiveStar.limitedRate', 2], ['gacha.weightCurve', -1], ['gacha.fiveStar.radiance.lossThreshold', 1.2]]) {
+    const invalid = structuredClone(config); const keys = path.split('.'); const key = keys.pop(); keys.reduce((v, k) => v[k], invalid)[key] = value
     assert.throws(() => validateConfig(invalid))
   }
-  const invalid = structuredClone(config); invalid.standard.cards[0].rarity = 'UR'
+  for (const [path, value] of [
+    ['schemaVersion', 2], ['media.showProgress', 'yes'], ['media.timeoutSeconds', -1],
+    ['media.defaultVideo', '../private.mp4'], ['redirect.fallbackUrl', 'javascript:alert(1)'],
+    ['pools.SSR.featuredCards', []], ['pools.UR.cards.0.share', 1], ['pools.R.featuredRate', 2],
+  ]) {
+    const invalid = structuredClone(config), keys = path.split('.'), key = keys.pop()
+    keys.reduce((v, k) => v[k], invalid)[key] = value
+    assert.throws(() => validateConfig(invalid))
+  }
+  const invalid = structuredClone(config); invalid.pools.SSR.cards[0].rarity = 'UR'
   assert.throws(() => validateConfig(invalid))
   console.log(`Passed: ${audited} independently audited draws; ${radiance} natural radiance wins; simulation gaps, multi-pull limits, persistence and invalid configuration checks.`)
 }

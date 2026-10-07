@@ -1,4 +1,7 @@
 mod data;
+#[cfg(test)]
+#[path = "../build_config.rs"]
+mod build_config_tests;
 #[allow(unused_parens)]
 mod engine {
     include!(concat!(env!("OUT_DIR"), "/engine.rs"));

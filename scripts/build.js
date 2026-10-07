@@ -12,22 +12,12 @@ if ((process.argv.includes('--cloudflare') || process.env.WORKERS_CI) && process
 }
 const config = JSON.parse(fs.readFileSync(path.join(crate, 'config.json'), 'utf8'))
 require('./validate-config.js').validateConfig(config)
-for (const pool of ['limited', 'standard', 'preferred', 'filler']) {
-  const plan = config[pool]
-  if (!Array.isArray(plan.cards) || !Array.isArray(plan.up)) throw new Error('Invalid pool: ' + pool)
-  for (const card of [...plan.cards, ...plan.up]) {
-    if (!card.url || !card.rarity) throw new Error('Invalid card: ' + pool)
-    if (card.video) {
-      const file = path.resolve(root, 'pages', card.video)
-      if (!file.startsWith(path.join(root, 'pages') + path.sep) || !fs.existsSync(file)) throw new Error('Video missing or outside pages: ' + card.video)
-    }
-  }
-}
-if (config.progress.SHOW && config.progress.BYTES > 0) {
-  const video = config.limited.cards.find(card => card.video)
-  if (video && fs.statSync(path.resolve(root, 'pages', video.video)).size !== config.progress.BYTES) {
-    throw new Error('Video byte count changed; update progress.BYTES in wasm/config.json')
-  }
+const targets = Object.values(config.pools).flatMap(pool => [...pool.cards, ...(pool.featuredCards || [])])
+const videos = [config.media.defaultVideo, ...targets.map(card => card.video)].filter(Boolean)
+for (const video of videos) {
+  const base = fs.realpathSync(path.join(root, 'pages'))
+  const file = fs.realpathSync(path.join(base, video))
+  if (!file.startsWith(base + path.sep) || !fs.statSync(file).isFile()) throw new Error('Invalid media video path: ' + video)
 }
 const result = spawnSync('cargo', ['+nightly-2026-10-01', 'build', '-Zbuild-std=std,panic_abort', '-Zbuild-std-features=', '--manifest-path', path.join(crate, 'Cargo.toml'), '--target', 'wasm32-unknown-unknown', '--release', '--locked'], { cwd: root, stdio: 'inherit', env: { ...process.env, AHA_BUILD_NONCE: crypto.randomBytes(32).toString('hex'), RUSTFLAGS: '-Zunstable-options -Cpanic=immediate-abort'  } })
 if (result.error) throw result.error
@@ -35,8 +25,8 @@ if (result.status !== 0) process.exit(result.status || 1)
 const binary = fs.readFileSync(path.join(crate, 'target/wasm32-unknown-unknown/release/aha_wasm.wasm'))
 new WebAssembly.Module(binary)
 // Fail closed if release optimization ever reintroduces complete target URLs.
-const targets = ['limited', 'standard', 'preferred', 'filler'].flatMap(pool => [...config[pool].cards, ...config[pool].up])
 for (const target of targets) {
+  if (binary.includes(Buffer.from(target.title))) throw new Error('Plaintext card title found in WASM')
   if (/^https?:/.test(target.url) && binary.includes(Buffer.from(target.url))) {
     throw new Error('Plaintext target URL found in WASM; deployment stopped')
   }
@@ -44,7 +34,7 @@ for (const target of targets) {
 for (const source of ['config.json', 'src/guide.html']) {
   if (binary.includes(fs.readFileSync(path.join(crate, source)))) throw new Error('Plaintext embedded source found: ' + source)
 }
-const fragments = ['index out of bounds: the len is ', '点击任意处开声音', '3★池未配置（兜底）', '3★池未配置（提升为4★）', '启动动画', '限定', '歪了', '下个5★必是限定UP', '大保底', '本次必为限定UP', '捕获明光', '已触发', '[卡池] 跳转目标', 'storageBroken', '[卡池] localStorage 不可用', 'fallback', 'group']
+const fragments = ['index out of bounds: the len is ', '点击任意处开声音', '3★池未配置（兜底）', '3★池未配置（提升为4★）', '启动动画', '限定', '歪了', '下个5★必是限定UP', '大保底', '本次必为限定UP', '捕获明光', '已触发', '[卡池] 跳转目标', 'storageBroken', '[卡池] localStorage 不可用', 'fallback', 'group', 'title']
 for (const source of ['src/engine.rs', 'src/runtime.rs']) {
   const text = fs.readFileSync(path.join(crate, source), 'utf8')
   for (const match of text.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)) {

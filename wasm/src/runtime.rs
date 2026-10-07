@@ -40,13 +40,13 @@ impl Session {
         ]
     }
     fn block(&mut self) -> Vec<Value> {
-        if self.resolved || self.startup["MUTED"] == true {
+        if self.resolved || self.startup["muted"] == true {
             return vec![];
         }
         self.resolved = true;
         self.blocked = true;
         vec![
-            json!({"op":"hint","text":format!("{}{}", "🔇 点击任意处开声音　·　",txt(&self.startup["SKIP_HINT"]))}),
+            json!({"op":"hint","text":format!("{}{}", "🔇 点击任意处开声音　·　",txt(&self.startup["skipHint"]))}),
             log(
                 "[启动动画] 带声音播放被拦下，先静音播放；点击任意处开启声音",
                 Value::Null,
@@ -57,14 +57,14 @@ impl Session {
         if self.finished {
             return vec![];
         }
-        let timeout = num(&self.startup["TIMEOUT"]);
-        let muted = self.startup["MUTED"] == true;
+        let timeout = num(&self.startup["timeoutSeconds"]);
+        let muted = self.startup["muted"] == true;
         match event {
             "start" if !self.started => {
                 self.started = true;
                 vec![
                     json!({"op":"guide_status"}),
-                    json!({"op":"video","url":self.video,"muted":muted,"hint":self.startup["SKIP_HINT"],"progress":self.progress}),
+                    json!({"op":"video","url":self.video,"muted":muted,"hint":self.startup["skipHint"],"progress":self.progress}),
                     json!({"op":"timer","id":"load","ms":if timeout>0.0 {(timeout+5.0)*1000.0} else {30000.0}}),
                     log(
                         "[启动动画] 开始播放",
@@ -91,7 +91,7 @@ impl Session {
                 self.blocked = false;
                 vec![
                     json!({"op":"sound","muted":false,"restart":true}),
-                    json!({"op":"hint","text":self.startup["SKIP_HINT"]}),
+                    json!({"op":"hint","text":self.startup["skipHint"]}),
                     json!({"op":"play","kind":"unlock"}),
                     log("[启动动画] 用户交互，已开启声音并从头重播", Value::Null),
                 ]
@@ -118,7 +118,7 @@ pub fn execute(request: &Value) -> Value {
     let event = txt(&request["event"]);
     if event == "metadata" {
         let config: Value = serde_json::from_str(crate::data::config()).unwrap();
-        return json!({"storageKey":config["config"]["STORAGE_KEY"]});
+        return json!({"storageKey":config["storage"]["key"]});
     }
     if event != "init" && event != "compare" {
         return SESSION.with(|s|json!({"commands":s.borrow_mut().as_mut().map(|s|s.event(event,request)).unwrap_or_default()}));
@@ -147,7 +147,7 @@ pub fn execute(request: &Value) -> Value {
     }
     SESSION.with(|s| *s.borrow_mut() = None);
     let search = txt(&request["search"]);
-    let key = engine.config["config"]["STORAGE_KEY"].clone();
+    let key = engine.config["storage"]["key"].clone();
     let mut commands = vec![];
     if matches!(param(search, "reset").as_deref(), Some("1" | "true")) {
         engine.state = default_state();
@@ -220,7 +220,7 @@ pub fn execute(request: &Value) -> Value {
     } else {
         let pull = param(search, "pull").map(|v| js_number(&v)).unwrap_or(1.0);
         let count = if pull.is_finite() && pull > 1.0 {
-            pull.floor().min(engine.cfg("MAX_PULLS")) as usize
+            pull.floor().min(num(&engine.config["gacha"]["maxPulls"])) as usize
         } else {
             1
         };
@@ -239,8 +239,8 @@ pub fn execute(request: &Value) -> Value {
                 *s.borrow_mut() = Some(Session {
                     destination,
                     video,
-                    startup: engine.config["startup"].clone(),
-                    progress: engine.config["progress"].clone(),
+                    startup: engine.config["media"].clone(),
+                    progress: engine.progress(&best),
                     started: false,
                     finished: false,
                     resolved: false,
