@@ -119,6 +119,48 @@
         text-decoration: underline;
         text-underline-offset: 4px;
       }
+      .site-footer {
+        margin-top: 56px;
+        padding-top: 16px;
+        border-top: 1px solid #000;
+      }
+      .site-stories {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 32px;
+      }
+      .site-stories a {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 8px;
+        min-height: 44px;
+        padding: 8px 0;
+        color: #000;
+        font-size: 13px;
+        line-height: 1.8;
+        text-decoration: none;
+      }
+      .site-stories a:last-child {
+        justify-content: flex-end;
+      }
+      .site-stories a:hover span {
+        text-decoration: underline;
+        text-underline-offset: 5px;
+      }
+      .site-stories svg {
+        flex: 0 0 13px;
+        width: 13px;
+        height: 13px;
+      }
+      .footer-message {
+        margin: 24px 0 0;
+        font-size: 12px;
+        line-height: 1.8;
+        letter-spacing: 0.04em;
+        text-align: center;
+        text-wrap: balance;
+      }
       @media (max-width: 480px) {
         body {
           padding: 48px 24px;
@@ -128,6 +170,17 @@
         }
         .submission {
           margin-top: 40px;
+        }
+        .site-footer {
+          margin-top: 40px;
+          padding-top: 12px;
+        }
+        .site-stories {
+          gap: 20px;
+        }
+        .site-stories a {
+          align-items: baseline;
+          font-size: 12px;
         }
         .enter {
           flex-basis: 48px;
@@ -174,6 +227,23 @@
         </div>
         <p>我们会酌情采用。</p>
       </section>
+      <footer class="site-footer">
+        <nav class="site-stories" aria-label="关于本站的视频">
+        <a href="https://www.bilibili.com/video/BV1S8pK6xEci/">
+          <span>本站域名所有者的采访</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M5 19 19 5M5 5h14v14" />
+          </svg>
+        </a>
+        <a href="https://www.bilibili.com/video/BV1fMHC6GEpT/">
+          <span>本站开发者的现身说法</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M5 19 19 5M5 5h14v14" />
+          </svg>
+        </a>
+        </nav>
+        <p class="footer-message">「多些享受游戏，少些网络对立，被游戏玩了可就真没乐子了。」——某位假面愚者留</p>
+      </footer>
     </main>
     <script>
       const copy = document.getElementById('copy')
