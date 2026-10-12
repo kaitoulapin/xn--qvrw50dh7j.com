@@ -245,6 +245,10 @@
         {
           "url": "https://s.team",
           "title": "Steam"
+        },
+        {
+          "url": "https://www.minecraft.net/zh-hans",
+          "title": "我的世界官网"
         }
       ],
       "featuredCards": [
