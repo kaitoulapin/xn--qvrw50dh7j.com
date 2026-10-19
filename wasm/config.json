@@ -217,7 +217,12 @@
           "title": "「致以无瑕之人」——爱莉希雅「真我·人之律者」角色预告"
         }
       ],
-      "featuredCards": [],
+      "featuredCards": [
+        {
+          "url": "https://www.bilibili.com/video/BV1VZMw6DEor/",
+          "title": "【高清中字】2026CBC总决赛周全决赛展演"
+        }
+      ],
       "featuredRate": 0.5
     },
     "R": {
@@ -345,10 +350,6 @@
         {
           "url": "https://warthunder.com",
           "title": "战争雷霆官网"
-        },
-        {
-          "url": "https://m.news.4399.com/mnsj/",
-          "title": "4399迷你世界"
         },
         {
           "url": "https://pubg.com/zh-cn/main",
